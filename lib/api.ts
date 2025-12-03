@@ -1,4 +1,4 @@
-const API_BASE =
+﻿const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ||
   "http://server.muhammedeminkecik.com.tr:5002";
 
@@ -69,6 +69,12 @@ export type TowTruck = {
   driverName?: string | null;
   driverPhotoUrl?: string | null;
   isActive?: boolean;
+  operatingAreas?: {
+    provinceId?: number;
+    districtId?: number;
+    city?: string | null;
+    district?: string | null;
+  }[] | null;
 };
 
 type ApiOptions = RequestInit & { token?: string };
@@ -91,7 +97,7 @@ async function api<T>(path: string, options: ApiOptions = {}) {
     const message =
       (data as { message?: string })?.message ||
       res.statusText ||
-      "İstek başarısız";
+      "Ä°stek baÅŸarÄ±sÄ±z";
     throw new Error(message);
   }
   return data;
@@ -133,7 +139,7 @@ export async function updateCompany(
   token: string | undefined,
   payload: Partial<CompanyRegistrationDto>
 ) {
-  if (!token) throw new Error("Oturum bulunamadı");
+  if (!token) throw new Error("Oturum bulunamadi±");
   return api<CompanyDto>("/api/Companies/me", {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -175,7 +181,7 @@ export async function setTicketStatus(
   id: number,
   status: number
 ) {
-  if (!token) throw new Error("Oturum bulunamadı");
+  if (!token) throw new Error("Oturum bulunamadi±");
   return api(`/api/Tickets/${id}/status`, {
     method: "PUT",
     body: JSON.stringify(status),
@@ -196,7 +202,7 @@ export async function addTowTruck(
     areas: { provinceId: number; districtId: number; city?: string }[];
   }
 ) {
-  if (!token) throw new Error("Oturum bulunamadı");
+  if (!token) throw new Error("Oturum bulunamadi");
   const form = new FormData();
   form.append("LicensePlate", payload.licensePlate);
   form.append("DriverName", payload.driverName);
@@ -209,22 +215,70 @@ export async function addTowTruck(
   });
 
   if (!res.ok) {
-    const message = res.statusText || "Çekici eklenemedi";
+    const message = res.statusText || "Cekici eklenemedi";
+    throw new Error(message);
+  }
+  return (await res.json()) as TowTruck;
+}
+
+export async function updateTowTruck(
+  token: string | undefined,
+  id: number,
+  payload: {
+    licensePlate?: string;
+    driverName?: string;
+    isActive?: boolean;
+    areas?: { provinceId: number; districtId: number; city?: string; district?: string }[];
+  }
+) {
+  if (!token) throw new Error("Oturum bulunamadi");
+  const form = new FormData();
+  if (payload.licensePlate !== undefined) form.append("LicensePlate", payload.licensePlate);
+  if (payload.driverName !== undefined) form.append("DriverName", payload.driverName);
+  if (payload.isActive !== undefined) form.append("IsActive", String(payload.isActive));
+  if (payload.areas) form.append("AreasJson", JSON.stringify(payload.areas));
+
+  const res = await fetch(`${API_BASE}/api/TowTrucks/${id}`, {
+    method: "PUT",
+    body: form,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const message = res.statusText || "Cekici guncellenemedi";
     throw new Error(message);
   }
   return (await res.json()) as TowTruck;
 }
 
 export async function deactivateTowTruck(token: string | undefined, id: number) {
-  if (!token) throw new Error("Oturum bulunamadı");
+  if (!token) throw new Error("Oturum bulunamadi");
   return api(`/api/TowTrucks/${id}/deactivate`, {
     method: "PUT",
     token,
   });
 }
 
+export async function activateTowTruck(token: string | undefined, id: number) {
+  if (!token) throw new Error("Oturum bulunamadi");
+  const form = new FormData();
+  form.append("IsActive", "true");
+
+  const res = await fetch(`${API_BASE}/api/TowTrucks/${id}`, {
+    method: "PUT",
+    body: form,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const message = res.statusText || "Cekici aktifleştirilemedi";
+    throw new Error(message);
+  }
+  return (await res.json()) as TowTruck;
+}
+
 export async function deleteTowTruck(token: string | undefined, id: number) {
-  if (!token) throw new Error("Oturum bulunamadı");
+  if (!token) throw new Error("Oturum bulunamadi");
   return api(`/api/TowTrucks/${id}`, {
     method: "DELETE",
     token,

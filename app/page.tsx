@@ -1,7 +1,7 @@
 ﻿/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
 import {
   getCities,
@@ -9,13 +9,17 @@ import {
   registerCompany,
   loginCompany,
   addTowTruck,
+  updateTowTruck,
   listTowTrucks,
   deactivateTowTruck,
+  activateTowTruck,
   deleteTowTruck,
+  findNearestCompanies,
   type City,
   type District,
   type AuthResponseDto,
   type TowTruck,
+  type CompanyDto,
 } from "@/lib/api";
 import Image from "next/image";
 import logo from "./logo.png";
@@ -23,6 +27,7 @@ import logo from "./logo.png";
 const TOKEN_KEY = "yd-auth-token";
 const USER_KEY = "yd-user";
 const PROFILE_KEY = "yd-profile";
+const TOW_LOC_KEY = "yd-tow-loc";
 
 export default function Home() {
   const [cities, setCities] = useState<City[]>([]);
@@ -74,9 +79,33 @@ export default function Home() {
   });
   const [towForm, setTowForm] = useState({ name: "", plate: "", notes: "" });
   const [towList, setTowList] = useState<
-    { id: number; name: string; plate: string; notes?: string; isActive?: boolean }[]
+    {
+      id: number;
+      name: string;
+      plate: string;
+      location?: string;
+      isActive?: boolean;
+      areaProvinceId?: number;
+      areaDistrictId?: number;
+      areaCity?: string;
+      areaDistrict?: string;
+    }[]
   >([]);
   const [towLoading, setTowLoading] = useState<boolean>(false);
+  const [editingTowId, setEditingTowId] = useState<number | null>(null);
+  const [editingTowForm, setEditingTowForm] = useState({
+    name: "",
+    plate: "",
+    provinceId: "",
+    districtId: "",
+    cityName: "",
+    districtName: "",
+  });
+  const [editingDistricts, setEditingDistricts] = useState<District[]>([]);
+  const districtNameCache = useRef<Record<number, string>>({});
+  const towLocCache = useRef<Record<number, { city?: string; district?: string }>>({});
+  const [companies, setCompanies] = useState<CompanyDto[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
 
   useEffect(() => {
     getCities()
@@ -89,6 +118,7 @@ export default function Home() {
       const savedToken = localStorage.getItem(TOKEN_KEY);
       const savedUser = localStorage.getItem(USER_KEY);
       const savedProfile = localStorage.getItem(PROFILE_KEY);
+      const savedTowLoc = localStorage.getItem(TOW_LOC_KEY);
       if (savedUser) {
         const parsedUser = JSON.parse(savedUser);
         setUser(parsedUser);
@@ -99,6 +129,9 @@ export default function Home() {
       }
       if (savedToken) {
         setAuthToken(savedToken);
+      }
+      if (savedTowLoc) {
+        towLocCache.current = JSON.parse(savedTowLoc);
       }
     } catch {
       // ignore parse errors and continue with a fresh session
@@ -111,6 +144,29 @@ export default function Home() {
       .then(setDistricts)
       .catch(() => setDistricts([]));
   }, [provinceId]);
+
+  useEffect(() => {
+    const loadCompanies = async () => {
+      if (!provinceId && !districtId) {
+        setCompanies([]);
+        return;
+      }
+      setCompaniesLoading(true);
+      try {
+        const res = await findNearestCompanies({
+          provinceId: provinceId ? Number(provinceId) : undefined,
+          districtId: districtId ? Number(districtId) : undefined,
+          limit: 20,
+        });
+        setCompanies(res || []);
+      } catch {
+        setCompanies([]);
+      } finally {
+        setCompaniesLoading(false);
+      }
+    };
+    loadCompanies();
+  }, [provinceId, districtId]);
 
   const uniqueProvinces = useMemo(() => {
     const map = new Map<number, string>();
@@ -159,12 +215,14 @@ export default function Home() {
     localStorage.setItem(TOKEN_KEY, tokenValue);
     localStorage.setItem(USER_KEY, JSON.stringify(userData));
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profileData));
+    localStorage.setItem(TOW_LOC_KEY, JSON.stringify(towLocCache.current));
   };
 
   const clearSession = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(PROFILE_KEY);
+    localStorage.removeItem(TOW_LOC_KEY);
   };
 
   const handleAvatar = (res?: AuthResponseDto) => {
@@ -188,7 +246,7 @@ export default function Home() {
         .join(" ")
         .trim();
     const nextUser = {
-      name: display || "Kullanici",
+      name: display || "Kullanıcı",
       company: companyName,
       photoUrl: photoPreview || undefined,
       email,
@@ -216,17 +274,85 @@ export default function Home() {
     setTowLoading(true);
     try {
       const data = await listTowTrucks(activeToken);
+      console.log("tow api response", JSON.stringify(data, null, 2));
+      const provincesToFetch = new Set<number>();
+      (data || []).forEach((tow) => {
+        const area = (tow as any).operatingAreas?.[0];
+        const districtId = area?.districtId;
+        if (
+          districtId !== undefined &&
+          districtId !== null &&
+          !area?.district &&
+          !districtNameCache.current[districtId] &&
+          area?.provinceId
+        ) {
+          provincesToFetch.add(area.provinceId);
+        }
+      });
+
+      for (const provId of provincesToFetch) {
+        try {
+          const fetched = await getDistricts(provId);
+          fetched.forEach((d) => {
+            districtNameCache.current[d.districtId] = d.districtName || "";
+          });
+        } catch {
+          // ignore
+        }
+      }
+
       setTowList(
-        (data || []).map((tow) => ({
-          id: tow.id || Date.now(),
-          name: tow.driverName || "Çekici",
-          plate: tow.licensePlate || "",
-          notes: tow.driverPhotoUrl || "",
-          isActive: tow.isActive,
-        }))
+        (data || []).map((tow) => {
+          const area = (tow as any).operatingAreas?.[0];
+          const savedLoc = tow.id ? towLocCache.current[tow.id] : undefined;
+          const districtIdVal = area?.districtId ?? undefined;
+          const districtFromState =
+            districtIdVal !== undefined
+              ? districts.find((d) => d.districtId === districtIdVal)?.districtName || ""
+              : "";
+          const provinceName =
+            uniqueProvinces.find((p) => p.id === area?.provinceId)?.name ||
+            savedLoc?.city ||
+            area?.city ||
+            (area?.provinceId && area.provinceId !== 0 ? `İl #${area.provinceId}` : "") ||
+            selectedProvinceName;
+          const cachedDistrict =
+            (area?.districtId ?? null) !== null && (area?.districtId ?? undefined) !== undefined
+              ? districtNameCache.current[area.districtId] || ""
+              : "";
+          const districtName =
+            area?.district ||
+            cachedDistrict ||
+            districtFromState ||
+            savedLoc?.district ||
+            (area?.districtId && area.districtId !== 0 ? `İlce #${area.districtId}` : "") ||
+            selectedDistrictName;
+          const locationFromArea = [districtName, provinceName].filter(Boolean).join(", ");
+          const locationFallback = [selectedDistrictName, selectedProvinceName]
+            .filter(Boolean)
+            .join(", ");
+          const location = locationFromArea || locationFallback || "";
+          if (tow.id) {
+            towLocCache.current[tow.id] = {
+              city: provinceName || savedLoc?.city,
+              district: districtName || savedLoc?.district,
+            };
+          }
+          return {
+            id: tow.id || Date.now(),
+            name: tow.driverName || "Çekici",
+            plate: tow.licensePlate || "",
+            location: location || undefined,
+            isActive: tow.isActive,
+            areaProvinceId: area?.provinceId ?? (provinceId ? Number(provinceId) : undefined),
+            areaDistrictId: area?.districtId ?? districtIdVal,
+            areaCity: area?.city || undefined,
+            areaDistrict: area?.district || cachedDistrict || districtFromState || undefined,
+          };
+        })
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Çekici listesi alınamadı";
+      const message = err instanceof Error ? err.message : "Çekici listesi alinamadi";
       setToast(message);
     } finally {
       setTowLoading(false);
@@ -236,7 +362,7 @@ export default function Home() {
   const handleRegister = async () => {
     setToast("");
     if (!provinceId || !districtId) {
-      setToast("Lütfen il ve ilçe seçin.");
+      setToast("Lütfen il ve ilçe seçiniz.");
       return;
     }
     setRegistering(true);
@@ -256,15 +382,16 @@ export default function Home() {
         district: selectedDistrictName,
       };
       const res = await registerCompany(payload);
-      handleAvatar(res);
+      const { nextUser, nextProfile } = handleAvatar(res);
       if (res?.token) {
         setAuthToken(res.token);
+        persistSession(res.token, nextUser, nextProfile);
         loadTowList(res.token);
       }
-      setToast("Kayıt başarılı, hoş geldin!");
+      setToast("Kayıt başarılı, hoş geldiniz!");
       setShowRegister(false);
     } catch {
-      setToast("Kayıt başarısız, bilgileri kontrol et");
+      setToast("Kayıt başarısız, bilgileri kontrol ediniz");
     } finally {
       setRegistering(false);
     }
@@ -278,15 +405,16 @@ export default function Home() {
         email: loginForm.email,
         password: loginForm.password,
       });
-      handleAvatar(res);
+      const { nextUser, nextProfile } = handleAvatar(res);
       if (res?.token) {
         setAuthToken(res.token);
+        persistSession(res.token, nextUser, nextProfile);
         loadTowList(res.token);
       }
-      setToast("Giriş başarılı, hoş geldin!");
+      setToast("Giriş başarılı, hoş geldiniz!");
       setShowLogin(false);
     } catch {
-      setToast("Giriş başarısız, bilgileri kontrol et");
+      setToast("Giriş başarısız, bilgilerinizi kontrol ediniz");
     } finally {
       setRegistering(false);
     }
@@ -311,29 +439,33 @@ export default function Home() {
 
   const handleLogout = () => {
     setUser(null);
+    clearSession();
     setAuthToken("");
     setTowList([]);
     setShowProfileMenu(false);
     setShowProfileModal(false);
     setToast("Çıkış yapıldı");
   };
-
   const handleProfileSave = () => {
     const displayName =
       profileForm.companyName ||
       [profileForm.firstName, profileForm.lastName].filter(Boolean).join(" ").trim() ||
       "Kullanıcı";
-    setUser((prev) => ({
+    const updatedUser = {
       name: displayName,
-      company: profileForm.companyName || prev?.company,
-      photoUrl: prev?.photoUrl,
-      email: profileForm.email || prev?.email,
-      phoneNumber: profileForm.phoneNumber || prev?.phoneNumber,
-      serviceCity: profileForm.serviceCity || prev?.serviceCity,
-      fullAddress: profileForm.fullAddress || prev?.fullAddress,
-    }));
+      company: profileForm.companyName || user?.company,
+      photoUrl: user?.photoUrl,
+      email: profileForm.email || user?.email,
+      phoneNumber: profileForm.phoneNumber || user?.phoneNumber,
+      serviceCity: profileForm.serviceCity || user?.serviceCity,
+      fullAddress: profileForm.fullAddress || user?.fullAddress,
+    };
+    setUser(updatedUser);
+    if (authToken) {
+      persistSession(authToken, updatedUser, profileForm);
+    }
     setShowProfileModal(false);
-    setToast("Profil güncellendi");
+    setToast("Profiliniz güncellendi");
   };
 
   const openTowList = () => {
@@ -346,21 +478,22 @@ export default function Home() {
 
   const openTowModal = () => {
     setShowProfileMenu(false);
+    setShowTowList(false); // modal �stte olsun diye listeyi kapat
     setShowTowModal(true);
   };
 
   const handleTowSave = async () => {
     if (!authToken) {
-      setToast("Çekici eklemek için önce giriş yapın.");
+      setToast("Çekici eklemek için önce giris yapınız.");
       setShowLogin(true);
       return;
     }
     if (!provinceId || !districtId) {
-      setToast("Lütfen çekici için il ve ilçe seçin.");
+      setToast("Lütfen çekici için il ve ilçe seçiniz.");
       return;
     }
     if (!towForm.name || !towForm.plate) {
-      setToast("Çekici adı ve plaka girin");
+      setToast("Çekici adı ve plaka giriniz");
       return;
     }
     setTowLoading(true);
@@ -372,7 +505,8 @@ export default function Home() {
           {
             provinceId: Number(provinceId),
             districtId: Number(districtId),
-            city: selectedDistrictName || selectedProvinceName,
+            city: selectedProvinceName || undefined,
+            district: selectedDistrictName || undefined,
           },
         ],
       });
@@ -382,21 +516,37 @@ export default function Home() {
           id: newTow.id || Date.now(),
           name: newTow.driverName || towForm.name,
           plate: newTow.licensePlate || towForm.plate,
-          notes: towForm.notes,
+          location: [selectedDistrictName, selectedProvinceName].filter(Boolean).join(", "),
+          areaProvinceId: Number(provinceId),
+          areaDistrictId: Number(districtId),
+          areaCity: selectedProvinceName,
+          areaDistrict: selectedDistrictName,
           isActive: newTow.isActive,
         },
       ]);
+      if (newTow.id) {
+        towLocCache.current[newTow.id] = {
+          city: selectedProvinceName,
+          district: selectedDistrictName,
+        };
+        localStorage.setItem(TOW_LOC_KEY, JSON.stringify(towLocCache.current));
+      }
       setTowForm({ name: "", plate: "", notes: "" });
       setShowTowModal(false);
       setShowTowList(true);
       setToast("Çekici eklendi");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Çekici eklenemedi";
-      setToast(message);
+      if (err instanceof Error && err.message.toLowerCase().includes("failed to fetch")) {
+        setToast("Çekici eklenemedi: API'ye ulasilamadi (CORS ya da 500 hatasi).");
+      } else {
+        const message = err instanceof Error ? err.message : "Çekici eklenemedi";
+        setToast(message);
+      }
     } finally {
       setTowLoading(false);
     }
-  };const handleTowUpdate = (id: number, field: "name" | "plate" | "notes", value: string) => {
+  };
+  const handleTowUpdate = (id: number, field: "name" | "plate" | "notes", value: string) => {
     setTowList((list) =>
       list.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
@@ -404,30 +554,153 @@ export default function Home() {
 
   const handleTowToggleActive = async (id: number) => {
     if (!authToken) {
-      setToast("Önce giriş yapın.");
+      setToast("Önce giriş yapınız.");
       return;
     }
     const current = towList.find((t) => t.id === id);
     if (!current) return;
-    if (!current.isActive) {
-      setToast("Aktifleştirme endpointi yok. Sadece pasifleştirebilirsiniz.");
+    try {
+      if (current.isActive) {
+        await deactivateTowTruck(authToken, id);
+        setTowList((list) =>
+          list.map((item) => (item.id === id ? { ...item, isActive: false } : item))
+        );
+        setToast("Çekici pasiflestirildi");
+      } else {
+        await activateTowTruck(authToken, id);
+        setTowList((list) =>
+          list.map((item) => (item.id === id ? { ...item, isActive: true } : item))
+        );
+        setToast("Çekici aktiflestirildi");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Durum güncellenemedi";
+      setToast(message);
+    }
+  };
+
+  const startTowEdit = (id: number) => {
+    const current = towList.find((t) => t.id === id);
+    if (!current) return;
+    setEditingTowId(id);
+    const districtNameFromState =
+      current.areaDistrictId !== undefined && current.areaDistrictId !== null
+        ? districts.find((d) => d.districtId === current.areaDistrictId)?.districtName || ""
+        : "";
+    setEditingTowForm({
+      name: current.name || "",
+      plate: current.plate || "",
+      provinceId: String(current.areaProvinceId || provinceId || ""),
+      districtId: current.areaDistrictId ? String(current.areaDistrictId) : "",
+      cityName: current.areaCity || selectedProvinceName || "",
+      districtName:
+        current.areaDistrict ||
+        (current.areaDistrictId ? districtNameCache.current[current.areaDistrictId] : "") ||
+        districtNameFromState ||
+        selectedDistrictName ||
+        "",
+    });
+    const provToLoad =
+      current.areaProvinceId ||
+      (editingTowForm.provinceId ? Number(editingTowForm.provinceId) : null) ||
+      (provinceId ? Number(provinceId) : null);
+    if (provToLoad) {
+      getDistricts(provToLoad)
+        .then(setEditingDistricts)
+        .catch(() => setEditingDistricts([]));
+    } else {
+      setEditingDistricts(districts);
+    }
+  };
+
+  const cancelTowEdit = () => {
+    setEditingTowId(null);
+    setEditingTowForm({ name: "", plate: "", provinceId: "", districtId: "", cityName: "", districtName: "" });
+    setEditingDistricts([]);
+  };
+
+  const handleTowEditSave = async (id: number) => {
+    if (!authToken) {
+      setToast("Önce giriş yapınız.");
       return;
     }
+    const current = towList.find((t) => t.id === id);
+    if (!current) return;
     try {
-      await deactivateTowTruck(authToken, id);
+      const provinceName =
+        uniqueProvinces.find((p) => String(p.id) === editingTowForm.provinceId)?.name ||
+        current.areaCity;
+      const districtName =
+        editingDistricts.find((d) => String(d.districtId) === editingTowForm.districtId)
+          ?.districtName ||
+        (editingTowForm.districtId
+          ? districtNameCache.current[Number(editingTowForm.districtId)]
+          : "") ||
+        current.areaDistrict ||
+        (current.areaDistrictId ? `İlce #${current.areaDistrictId}` : "");
+      const updated = await updateTowTruck(authToken, id, {
+        driverName: editingTowForm.name,
+        licensePlate: editingTowForm.plate,
+        isActive: current.isActive,
+        areas:
+          editingTowForm.provinceId && editingTowForm.districtId
+            ? [
+                {
+                  provinceId: Number(editingTowForm.provinceId),
+                  districtId: Number(editingTowForm.districtId),
+                  city: provinceName || undefined,
+                  district: districtName || undefined,
+                },
+              ]
+            : current.areaProvinceId && current.areaDistrictId
+              ? [
+                  {
+                    provinceId: current.areaProvinceId,
+                    districtId: current.areaDistrictId,
+                    city: current.areaCity || provinceName,
+                    district: current.areaDistrict || districtName,
+                  },
+                ]
+              : undefined,
+      });
+      const area = (updated as any).operatingAreas?.[0];
+      const location = [area?.district, area?.city].filter(Boolean).join(", ");
+      if (updated.id) {
+        towLocCache.current[updated.id] = {
+          city: area?.city || provinceName || current.areaCity,
+          district: area?.district || districtName || current.areaDistrict,
+        };
+        localStorage.setItem(TOW_LOC_KEY, JSON.stringify(towLocCache.current));
+      }
       setTowList((list) =>
-        list.map((item) => (item.id === id ? { ...item, isActive: false } : item))
+        list.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                name: updated.driverName || editingTowForm.name,
+                plate: updated.licensePlate || editingTowForm.plate,
+                location: location || item.location,
+                areaProvinceId: area?.provinceId ?? item.areaProvinceId,
+                areaDistrictId: area?.districtId ?? item.areaDistrictId,
+                areaCity: area?.city ?? item.areaCity,
+                areaDistrict: area?.district ?? item.areaDistrict,
+                isActive: updated.isActive,
+              }
+            : item
+        )
       );
-      setToast("Çekici pasifleştirildi");
+      setEditingTowId(null);
+      setEditingTowForm({ name: "", plate: "" });
+      setToast("Çekici güncellendi");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Pasifleştirme başarısız";
+      const message = err instanceof Error ? err.message : "Güncelleme başarısız";
       setToast(message);
     }
   };
 
   const handleTowDelete = async (id: number) => {
     if (!authToken) {
-      setToast("Önce giriş yapın.");
+      setToast("Önce giriş yapınız.");
       return;
     }
     try {
@@ -435,8 +708,8 @@ export default function Home() {
       setTowList((list) => list.filter((item) => item.id !== id));
       setToast("Çekici silindi");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Silme başarısız";
-      setToast(message);
+      const message = err instanceof Error ? err.message : "Silme basarisiz";
+      setToast(`Silme hatası: ${message}`);
     }
   };
   const initials = useMemo(() => {
@@ -556,12 +829,63 @@ export default function Home() {
             referrerPolicy="no-referrer-when-downgrade"
             title="Harita"
           />
-          <div className={styles.mapBadge}>
-            {selectedDistrictName || "İlçe seç"} · {selectedProvinceName || "İl seç"}
-          </div>
+        <div className={styles.mapBadge}>
+          {selectedDistrictName || "�l�e se�"} � {selectedProvinceName || "�l se�"}
         </div>
-      </section>
+      </div>
+    </section>
 
+      <section className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <div className={styles.panelTitle}>Online �ekiciler</div>
+        </div>
+        {companiesLoading ? (
+          <div className={styles.smallMuted}>�ekiciler y�kleniyor...</div>
+        ) : companies.length === 0 ? (
+          <div className={styles.smallMuted}>Hen�z listelenecek �ekici yok.</div>
+        ) : (
+          <div className={styles.formGrid}>
+            {companies.map((c, idx) => (
+              <div key={`${c.id || idx}-${c.licensePlate || c.companyName || "cmp"}`} className={styles.field}>
+                <div className={styles.fieldRow}>
+                  <span>{c.companyName || c.city || "�ekici"}</span>
+                  <span className={styles.smallMuted}>{c.distance ? `${c.distance} km` : "Online"}</span>
+                </div>
+                <div className={styles.smallMuted}>Plaka: {c.email || "-"}</div>
+                <div className={styles.smallMuted}>
+                  Il/Ilce: {[c.district, c.city].filter(Boolean).join(", ") || "Belirtilmedi"}
+                </div>
+                <div className={styles.smallMuted}>Telefon: {c.phoneNumber || "-"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <div className={styles.panelTitle}>Online �ekiciler</div>
+        </div>
+        {towLoading ? (
+          <div className={styles.smallMuted}>�ekiciler y�kleniyor...</div>
+        ) : towList.length === 0 ? (
+          <div className={styles.smallMuted}>Hen�z listelenecek �ekici yok.</div>
+        ) : (
+          <div className={styles.formGrid}>
+            {towList.map((item) => (
+              <div key={item.id} className={styles.field}>
+                <div className={styles.fieldRow}>
+                  <span>{item.name || "�ekici"}</span>
+                  <span className={styles.smallMuted}>{item.isActive ? "Aktif" : "Pasif"}</span>
+                </div>
+                <div className={styles.smallMuted}>Plaka: {item.plate || "-"}</div>
+                <div className={styles.smallMuted}>
+                  Il/Ilce: {[item.areaDistrict || selectedDistrictName, item.areaCity || selectedProvinceName].filter(Boolean).join(", ") || item.location || "Belirtilmedi"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>\n
       {showTowModal ? (
         <div className={styles.modalOverlay} role="dialog" aria-modal="true">
           <div className={styles.modal}>
@@ -676,23 +1000,143 @@ export default function Home() {
                       <span className={styles.smallMuted}>{item.isActive ? "Aktif" : "Pasif"}</span>
                     </div>
                     <div className={styles.smallMuted}>Plaka: {item.plate || "-"}</div>
-                    <div className={styles.smallMuted}>Not: {item.notes?.trim() ? item.notes : "-"}</div>
+                    <div className={styles.smallMuted}>
+                      Durum: {item.isActive ? "Aktif" : "Pasif"}
+                    </div>
+                    <div className={styles.smallMuted}>
+                      Il/Ilce:{" "}
+                      {[item.areaDistrict || selectedDistrictName, item.areaCity || selectedProvinceName]
+                        .filter(Boolean)
+                        .join(", ") || item.location || "Belirtilmedi"}
+                    </div>
+                    {editingTowId === item.id ? (
+                      <div className={styles.formGrid}>
+                        <label className={styles.field}>
+                          <span>Ad</span>
+                          <input
+                            className={styles.input}
+                            value={editingTowForm.name}
+                            onChange={(e) =>
+                              setEditingTowForm({ ...editingTowForm, name: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label className={styles.field}>
+                          <span>Plaka</span>
+                          <input
+                            className={styles.input}
+                            value={editingTowForm.plate}
+                            onChange={(e) =>
+                              setEditingTowForm({ ...editingTowForm, plate: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label className={styles.field}>
+                          <span>Il</span>
+                          <select
+                            className={styles.select}
+                            value={editingTowForm.provinceId}
+                            onChange={async (e) => {
+                              const val = e.target.value;
+                              const provName =
+                                uniqueProvinces.find((p) => String(p.id) === val)?.name || "";
+                              setEditingTowForm((form) => ({
+                                ...form,
+                                provinceId: val,
+                                cityName: provName,
+                                districtId: "",
+                                districtName: "",
+                              }));
+                              setEditingDistricts([]);
+                              if (val) {
+                                try {
+                                  const fetched = await getDistricts(Number(val));
+                                  setEditingDistricts(fetched);
+                                } catch {
+                                  setEditingDistricts([]);
+                                }
+                              }
+                            }}
+                          >
+                            <option value="">Il secin</option>
+                            {uniqueProvinces.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className={styles.field}>
+                          <span>Ilce</span>
+                          <select
+                            className={styles.select}
+                            value={editingTowForm.districtId}
+                            onChange={(e) =>
+                              setEditingTowForm({
+                                ...editingTowForm,
+                                districtId: e.target.value,
+                                districtName:
+                                  editingDistricts.find((d) => String(d.districtId) === e.target.value)
+                                    ?.districtName || "",
+                              })
+                            }
+                            disabled={!editingTowForm.provinceId}
+                          >
+                            <option value="">Ilce secin</option>
+                            {editingDistricts.map((d) => (
+                              <option key={d.districtId} value={d.districtId}>
+                                {d.districtName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    ) : null}
                     <div className={styles.buttonRow}>
-                      <button
-                        className={styles.secondary}
-                        type="button"
-                        onClick={() => handleTowToggleActive(item.id)}
-                        disabled={!item.isActive}
-                      >
-                        Pasifleştir
-                      </button>
-                      <button
-                        className={styles.secondary}
-                        type="button"
-                        onClick={() => handleTowDelete(item.id)}
-                      >
-                        Sil
-                      </button>
+                      {editingTowId === item.id ? (
+                        <>
+                          <button
+                            className={styles.primary}
+                            type="button"
+                            onClick={() => handleTowEditSave(item.id)}
+                            disabled={towLoading}
+                          >
+                            Kaydet
+                          </button>
+                          <button
+                            className={styles.secondary}
+                            type="button"
+                            onClick={cancelTowEdit}
+                            disabled={towLoading}
+                          >
+                            Vazgeç
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className={styles.secondary}
+                            type="button"
+                            onClick={() => handleTowToggleActive(item.id)}
+                          >
+                            {item.isActive ? "Pasiflestir" : "Aktiflestir"}
+                          </button>
+                          <button
+                            className={styles.secondary}
+                            type="button"
+                            onClick={() => startTowEdit(item.id)}
+                          >
+                            Düzenle
+                          </button>
+                          <button
+                            className={styles.secondary}
+                            type="button"
+                            onClick={() => handleTowDelete(item.id)}
+                          >
+                            Sil
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1003,6 +1447,33 @@ export default function Home() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
