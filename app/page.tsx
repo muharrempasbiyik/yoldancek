@@ -106,6 +106,8 @@ export default function Home() {
   const towLocCache = useRef<Record<number, { city?: string; district?: string }>>({});
   const [companies, setCompanies] = useState<CompanyDto[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
+  const [expandedCompanyId, setExpandedCompanyId] = useState<number | string | null>(null);
+  const [mapQueryOverride, setMapQueryOverride] = useState<string>("");
 
   useEffect(() => {
     getCities()
@@ -191,13 +193,16 @@ export default function Home() {
     return found?.districtName || "";
   }, [districtId, districts]);
 
-  const query = [selectedDistrictName, selectedProvinceName || "Ankara", "Türkiye"]
-    .filter(Boolean)
-    .join(" ");
+  const getCompanyLocation = (company?: CompanyDto) => {
+    if (!company) return "";
+    return [company.district, company.city || selectedProvinceName].filter(Boolean).join(", ");
+  };
+
+  const query = mapQueryOverride || getCompanyLocation(companies[0]) || [selectedDistrictName, selectedProvinceName || "Ankara", "Turkiye"].filter(Boolean).join(" ");
 
   const zoom = districtId ? 13 : 11;
   const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(
-    query || "Türkiye"
+    query || "Turkiye"
   )}&output=embed&z=${zoom}&hl=tr&scrollwheel=1`;
 
   useEffect(() => {
@@ -775,13 +780,13 @@ export default function Home() {
                   <section className={styles.panel}>
         <div className={styles.panelHeader}>
           <div>
-            <div className={styles.panelTitle}>Konum Seç</div>
+            <div className={styles.panelTitle}>Konum Sec</div>
           </div>
         </div>
 
         <div className={styles.controls}>
           <label className={styles.field}>
-            <span>İl</span>
+            <span>Il</span>
             <select
               className={styles.select}
               value={provinceId}
@@ -790,9 +795,10 @@ export default function Home() {
                 setProvinceId(val);
                 setDistrictId("");
                 setDistricts([]);
+                setMapQueryOverride("");
               }}
             >
-              <option value="">İl seçin</option>
+              <option value="">Il secin</option>
               {uniqueProvinces.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -802,14 +808,17 @@ export default function Home() {
           </label>
 
           <label className={styles.field}>
-            <span>İlçe</span>
+            <span>Ilce</span>
             <select
               className={styles.select}
               value={districtId}
-              onChange={(e) => setDistrictId(e.target.value)}
+              onChange={(e) => {
+                setDistrictId(e.target.value);
+                setMapQueryOverride("");
+              }}
               disabled={!provinceId}
             >
-              <option value="">İlçe seçin</option>
+              <option value="">Ilce secin</option>
               {districts.map((d) => (
                 <option key={d.districtId} value={d.districtId}>
                   {d.districtName}
@@ -819,7 +828,7 @@ export default function Home() {
           </label>
         </div>
 
-        <div className={styles.mapWrap}>
+                <div className={styles.mapWrap}>
           <iframe
             key={mapUrl}
             className={styles.map}
@@ -829,64 +838,140 @@ export default function Home() {
             referrerPolicy="no-referrer-when-downgrade"
             title="Harita"
           />
-        <div className={styles.mapBadge}>
-          {selectedDistrictName || "�l�e se�"} � {selectedProvinceName || "�l se�"}
-        </div>
-      </div>
-    </section>
+          <div className={styles.mapBadge}>
+            {mapQueryOverride || `${selectedDistrictName || "Ilce sec"} | ${selectedProvinceName || "Il sec"}`}
+          </div>
+          {companies.length > 0 ? (
+            <div className={styles.mapPins}>
+              <div className={styles.mapPinsTitle}>Online Cekiciler</div>
+              <div className={styles.mapPinsList}>
+                {companies.slice(0, 12).map((c, idx) => {
+                  const locText = [c.district, c.city || selectedProvinceName]
+                    .filter(Boolean)
+                    .join(", ") || "Konum yok";
+                  const targetQuery = locText === "Konum yok" ? selectedProvinceName : locText;
+                  return (
+                    <button
+                      key={`${c.id || idx}-pin`}
+                      type="button"
+                      className={styles.mapPinButton}
+                      onClick={() => setMapQueryOverride(targetQuery)}
+                    >
+                      <span className={styles.mapPinDot} />
+                      <div className={styles.mapPinText}>
+                        <div className={styles.mapPinName}>{c.companyName || "Cekici"}</div>
+                        <div className={styles.mapPinMeta}>{locText}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div></section>
 
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Online �ekiciler</div>
+          <div className={styles.panelTitle}>Online Çekiciler</div>
         </div>
         {companiesLoading ? (
-          <div className={styles.smallMuted}>�ekiciler y�kleniyor...</div>
+          <div className={styles.smallMuted}>Cekiciler yukleniyor...</div>
         ) : companies.length === 0 ? (
-          <div className={styles.smallMuted}>Hen�z listelenecek �ekici yok.</div>
+          <div className={styles.smallMuted}>Henuz listelenecek cekici yok.</div>
         ) : (
           <div className={styles.formGrid}>
             {companies.map((c, idx) => (
-              <div key={`${c.id || idx}-${c.licensePlate || c.companyName || "cmp"}`} className={styles.field}>
-                <div className={styles.fieldRow}>
-                  <span>{c.companyName || c.city || "�ekici"}</span>
-                  <span className={styles.smallMuted}>{c.distance ? `${c.distance} km` : "Online"}</span>
+              <div key={`${c.id || idx}-${c.companyName || "cmp"}`} className={styles.companyCard}>
+                {(() => {
+                  const basePhone = (c.phoneNumber || "").trim();
+                  const cleaned = basePhone.replace(/[^0-9+]/g, "");
+                  const withoutPrefixZeros = cleaned.startsWith("+")
+                    ? cleaned
+                    : cleaned.replace(/^0+/, "");
+                  const phoneWithCountry = withoutPrefixZeros
+                    ? withoutPrefixZeros.startsWith("+")
+                      ? withoutPrefixZeros
+                      : `+90 ${withoutPrefixZeros}`
+                    : "";
+                  const phoneHref = phoneWithCountry
+                    ? `tel:${phoneWithCountry.replace(/\\s+/g, "")}`
+                    : undefined;
+                  return (
+                    <>
+                <div className={styles.companyHeader}>
+                  <div>
+                    <div className={styles.companyName}>{c.companyName || c.city || "Cekici"}</div>
+                    <div className={styles.phoneHighlight}>
+                      Telefon:
+                      <a
+                        className={styles.phoneLink}
+                        href={phoneHref}
+                      >
+                        {phoneWithCountry || "-"}
+                      </a>
+                    </div>
+                  </div>
+                  <div className={styles.pill}>
+                    {c.distance ? `${c.distance} km` : c.city || "Online"}
+                  </div>
                 </div>
-                <div className={styles.smallMuted}>Plaka: {c.email || "-"}</div>
-                <div className={styles.smallMuted}>
-                  Il/Ilce: {[c.district, c.city].filter(Boolean).join(", ") || "Belirtilmedi"}
+                    </>
+                  );
+                })()}
+
+                <div className={styles.companyMeta}>
+                  <div>
+                    <div className={styles.metaLabel}>Il/Ilce</div>
+                    <div className={styles.metaValue}>
+                      {[c.district, c.city].filter(Boolean).join(", ") || "Belirtilmedi"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className={styles.metaLabel}>Hizmet</div>
+                    <div className={styles.metaValue}>{c.serviceCity || "-"}</div>
+                  </div>
+                  <div>
+                    <div className={styles.metaLabel}>Adres</div>
+                    <div className={styles.metaValue}>{c.fullAddress || "-"}</div>
+                  </div>
                 </div>
-                <div className={styles.smallMuted}>Telefon: {c.phoneNumber || "-"}</div>
+
+                <div className={styles.buttonRow}>
+                  <button
+                    className={styles.secondary}
+                    type="button"
+                    onClick={() =>
+                      setExpandedCompanyId(
+                        expandedCompanyId === (c.id ?? idx) ? null : (c.id ?? idx)
+                      )
+                    }
+                  >
+                    Detay
+                  </button>
+                </div>
+                {expandedCompanyId === (c.id ?? idx) ? (
+                  <div className={styles.companyDetails}>
+                    <div className={styles.detailRow}>
+                      <span className={styles.metaLabel}>E-posta</span>
+                      <span className={styles.metaValue}>{c.email || "-"}</span>
+                    </div>
+                    <div className={styles.detailRow}>
+                      <span className={styles.metaLabel}>Hizmet Bolgesi</span>
+                      <span className={styles.metaValue}>
+                        {[c.district, c.city].filter(Boolean).join(", ") || "-"}
+                      </span>
+                    </div>
+                    <div className={styles.detailRow}>
+                      <span className={styles.metaLabel}>Servis Il</span>
+                      <span className={styles.metaValue}>{c.serviceCity || "-"}</span>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
         )}
-      </section>
-      <section className={styles.panel}>
-        <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Online �ekiciler</div>
-        </div>
-        {towLoading ? (
-          <div className={styles.smallMuted}>�ekiciler y�kleniyor...</div>
-        ) : towList.length === 0 ? (
-          <div className={styles.smallMuted}>Hen�z listelenecek �ekici yok.</div>
-        ) : (
-          <div className={styles.formGrid}>
-            {towList.map((item) => (
-              <div key={item.id} className={styles.field}>
-                <div className={styles.fieldRow}>
-                  <span>{item.name || "�ekici"}</span>
-                  <span className={styles.smallMuted}>{item.isActive ? "Aktif" : "Pasif"}</span>
-                </div>
-                <div className={styles.smallMuted}>Plaka: {item.plate || "-"}</div>
-                <div className={styles.smallMuted}>
-                  Il/Ilce: {[item.areaDistrict || selectedDistrictName, item.areaCity || selectedProvinceName].filter(Boolean).join(", ") || item.location || "Belirtilmedi"}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>\n
-      {showTowModal ? (
+      </section>{showTowModal ? (
         <div className={styles.modalOverlay} role="dialog" aria-modal="true">
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
@@ -1447,6 +1532,28 @@ export default function Home() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

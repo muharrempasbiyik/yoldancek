@@ -1,0 +1,10 @@
+<section className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <div>
+            <div className={styles.panelTitle}>Konum Seç</div>
+          </div>
+        </div>
+
+        <div className={styles.controls}>
+          <label className={styles.field}>
+            <span>Ýl</s
