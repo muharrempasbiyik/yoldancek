@@ -310,22 +310,33 @@ export default function Home() {
 
   const mapMarkers = useMemo(() => {
     if (companies.length === 0) return "";
+    const faviconUrl = typeof window !== 'undefined' ? `${window.location.origin}/favicon.ico` : "/favicon.ico";
     const markers = companies
       .filter((c) => (c as any).latitude && (c as any).longitude)
-      .map((c) => `${(c as any).latitude},${(c as any).longitude}`)
-      .join("|");
+      .map((c) => `icon:${encodeURIComponent(faviconUrl)}|${(c as any).latitude},${(c as any).longitude}`)
+      .join("&markers=");
     return markers;
   }, [companies]);
 
   const query = mapQueryOverride || getCompanyLocation(companies[0]) || [selectedDistrictName, selectedProvinceName || "Ankara", "Turkiye"].filter(Boolean).join(" ");
 
   const zoom = mapQueryOverride ? 14 : districtId ? 13 : 11;
+  
+  // Google Maps embed API marker icon özelleştirmesini desteklemiyor
+  // Bu yüzden embed API kullanmaya devam ediyoruz, marker icon'ları varsayılan olacak
+  // Favicon'u marker olarak kullanmak için Google Maps JavaScript API gerekir
   let mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(
     query || "Turkiye"
   )}&output=embed&z=${zoom}&hl=tr&scrollwheel=1`;
   
   if (mapMarkers) {
-    mapUrl += `&markers=${encodeURIComponent(mapMarkers)}`;
+    // Embed API'de marker icon özelleştirmesi desteklenmiyor
+    // Sadece koordinatları ekliyoruz
+    const markerCoords = companies
+      .filter((c) => (c as any).latitude && (c as any).longitude)
+      .map((c) => `${(c as any).latitude},${(c as any).longitude}`)
+      .join("|");
+    mapUrl += `&markers=${encodeURIComponent(markerCoords)}`;
   }
 
   useEffect(() => {
@@ -434,10 +445,30 @@ export default function Home() {
   };
 
   const handleUseMyLocation = () => {
-    askGeolocation((lat, lng) => {
+    askGeolocation(async (lat, lng) => {
       const q = `${lat},${lng}`;
       setMapQueryOverride(q);
       setGeoLocation({ lat, lng });
+      
+      // Reverse geocoding ile il ve ilçe bilgilerini al
+      try {
+        const { provinceName, districtName } = await reverseGeocode(lat, lng);
+        const provId = findProvinceId(provinceName);
+        if (provId) {
+          setProvinceId(String(provId));
+          const fetched = await getDistricts(provId);
+          setDistricts(fetched);
+          const distId = findDistrictId(fetched, districtName);
+          if (distId) {
+            setDistrictId(String(distId));
+          }
+          setToast("Konumdan il/ilçe alındı.");
+        } else {
+          setToast("Konumdan il bulunamadı, elle seçin.");
+        }
+      } catch {
+        setToast("Konumdan il/ilçe alınamadı, elle seçin.");
+      }
     });
   };
 

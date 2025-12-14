@@ -76,7 +76,11 @@ div[style*="position:fixed"][style*="bottom"][style*="left"],
 div[style*="border-radius: 50%"][style*="position: fixed"],
 div[style*="border-radius:50%"][style*="position:fixed"],
 div[style*="border-radius"][style*="position: fixed"][style*="bottom"],
-div[style*="border-radius"][style*="position:fixed"][style*="bottom"] {
+div[style*="border-radius"][style*="position:fixed"][style*="bottom"],
+div[style*="position:fixed"][style*="left:0px"][style*="bottom:0px"],
+div[style*="position: fixed"][style*="left: 0px"][style*="bottom: 0px"],
+div[style*="position:fixed"][style*="left:0"][style*="bottom:0"],
+div[style*="position: fixed"][style*="left: 0"][style*="bottom: 0"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -93,18 +97,51 @@ body > div[style*="position:fixed"][style*="bottom:0"][style*="left:0"],
 html > body > div[style*="position: fixed"][style*="bottom"],
 html > body > div[style*="position:fixed"][style*="bottom"],
 body > div[style*="left: 0"][style*="bottom: 0"],
-body > div[style*="left:0"][style*="bottom:0"] {
+body > div[style*="left:0"][style*="bottom:0"],
+body > div[style*="position:fixed"][style*="left:0px"][style*="bottom:0px"],
+body > div[style*="position: fixed"][style*="left: 0px"][style*="bottom: 0px"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
 }
 
 /* Tüm fixed position elementleri sol altta ise gizle */
 *[style*="position: fixed"][style*="left: 0"][style*="bottom: 0"],
 *[style*="position:fixed"][style*="left:0"][style*="bottom:0"],
 *[style*="position: fixed"][style*="left: 0"][style*="bottom"],
-*[style*="position:fixed"][style*="left:0"][style*="bottom"] {
+*[style*="position:fixed"][style*="left:0"][style*="bottom"],
+*[style*="position:fixed"][style*="left:0px"][style*="bottom:0px"],
+*[style*="position: fixed"][style*="left: 0px"][style*="bottom: 0px"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Next.js dev watermark - daha agresif yaklaşım */
+div[data-nextjs-toast],
+div[data-nextjs-dialog],
+div[data-nextjs-router],
+div[data-nextjs-scroll-focus-boundary],
+#__next-build-watcher,
+div[id*="next"],
+div[class*="next"],
+div[class*="Next"] {
+  position: relative !important;
+}
+
+/* Sol altta küçük yuvarlak butonlar */
+button[style*="position: fixed"][style*="bottom"],
+button[style*="position:fixed"][style*="bottom"],
+a[style*="position: fixed"][style*="bottom"],
+a[style*="position:fixed"][style*="bottom"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
