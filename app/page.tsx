@@ -15,6 +15,7 @@ import {
   activateTowTruck,
   deleteTowTruck,
   findNearestCompanies,
+  findNearestTowTrucks,
   type City,
   type District,
   type AuthResponseDto,
@@ -77,7 +78,11 @@ export default function Home() {
     fullAddress: "",
     email: "",
   });
+  const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState<string>("");
   const [towForm, setTowForm] = useState({ name: "", plate: "", notes: "" });
+  const [towPhoto, setTowPhoto] = useState<File | null>(null);
+  const [towPhotoPreview, setTowPhotoPreview] = useState<string>("");
   const [towList, setTowList] = useState<
     {
       id: number;
@@ -101,6 +106,8 @@ export default function Home() {
     cityName: "",
     districtName: "",
   });
+  const [editingTowPhoto, setEditingTowPhoto] = useState<File | null>(null);
+  const [editingTowPhotoPreview, setEditingTowPhotoPreview] = useState<string>("");
   const [editingDistricts, setEditingDistricts] = useState<District[]>([]);
   const districtNameCache = useRef<Record<number, string>>({});
   const towLocCache = useRef<Record<number, { city?: string; district?: string }>>({});
@@ -108,6 +115,43 @@ export default function Home() {
   const [companiesLoading, setCompaniesLoading] = useState(false);
   const [expandedCompanyId, setExpandedCompanyId] = useState<number | string | null>(null);
   const [mapQueryOverride, setMapQueryOverride] = useState<string>("");
+  const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedTowTruck, setSelectedTowTruck] = useState<CompanyDto & { licensePlate?: string | null } | null>(null);
+
+  const normalizeText = (val?: string) =>
+    (val || "")
+      .toLocaleLowerCase("tr-TR")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // Türkiye plaka formatı: 34 ABC 123 veya 34 ABC 1234
+  const formatLicensePlate = (value: string): string => {
+    // Sadece rakam ve harf al, boşlukları kaldır
+    const cleaned = value.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü]/g, "").toUpperCase();
+    
+    if (cleaned.length === 0) return "";
+    
+    // İlk 2 karakter rakam olmalı (il kodu)
+    let formatted = cleaned.slice(0, 2);
+    
+    if (cleaned.length > 2) {
+      // Sonraki 3 karakter harf olmalı
+      const letters = cleaned.slice(2, 5).replace(/[0-9]/g, "");
+      if (letters.length > 0) {
+        formatted += " " + letters;
+      }
+      
+      // Kalan karakterler rakam
+      if (cleaned.length > 5) {
+        const numbers = cleaned.slice(5, 9).replace(/[^0-9]/g, "");
+        if (numbers.length > 0) {
+          formatted += " " + numbers;
+        }
+      }
+    }
+    
+    return formatted;
+  };
 
   useEffect(() => {
     getCities()
@@ -149,18 +193,84 @@ export default function Home() {
 
   useEffect(() => {
     const loadCompanies = async () => {
-      if (!provinceId && !districtId) {
+      if (!provinceId && !districtId && !geoLocation) {
         setCompanies([]);
         return;
       }
       setCompaniesLoading(true);
       try {
-        const res = await findNearestCompanies({
-          provinceId: provinceId ? Number(provinceId) : undefined,
-          districtId: districtId ? Number(districtId) : undefined,
-          limit: 20,
-        });
-        setCompanies(res || []);
+        // Önce /api/location/nearest endpoint'ini dene (operatingAreas ile çekicileri getirir)
+        try {
+          const towTrucks = await findNearestTowTrucks({
+            latitude: geoLocation?.lat,
+            longitude: geoLocation?.lng,
+            provinceId: !geoLocation && provinceId ? Number(provinceId) : undefined,
+            districtId: !geoLocation && districtId ? Number(districtId) : undefined,
+            limit: 20,
+          });
+          
+          if (towTrucks && towTrucks.length > 0) {
+            const companiesArray: (CompanyDto & { licensePlate?: string | null; latitude?: number; longitude?: number })[] = [];
+            
+            const processTowTrucks = async () => {
+              for (const tt of towTrucks) {
+                if (!tt.isActive) continue;
+                
+                const areas = (tt as any).operatingAreas || [];
+                
+                let matchesArea = true;
+                if (provinceId || districtId) {
+                  matchesArea = areas.some((area: any) => {
+                    const matchesProvince = !provinceId || area.provinceId === Number(provinceId);
+                    const matchesDistrict = !districtId || area.districtId === Number(districtId);
+                    return matchesProvince && matchesDistrict;
+                  });
+                }
+                
+                if (!matchesArea) continue;
+                
+                const matchedArea = (areas.find((area: any) => {
+                  const matchesProvince = !provinceId || area.provinceId === Number(provinceId);
+                  const matchesDistrict = !districtId || area.districtId === Number(districtId);
+                  return matchesProvince && matchesDistrict;
+                }) || areas[0] || {}) as any;
+                
+                const company: CompanyDto & { licensePlate?: string | null; latitude?: number; longitude?: number } = {
+                  id: tt.id || Date.now() + Math.random(),
+                  companyName: (tt as any).driverName || (tt as any).licensePlate || "Çekici",
+                  phoneNumber: (tt as any).companyPhone || "",
+                  email: (tt as any).companyEmail || "",
+                  city: matchedArea.city || undefined,
+                  district: matchedArea.district || undefined,
+                  serviceCity: (tt as any).companyServiceCity || undefined,
+                  fullAddress: (tt as any).companyAddress || undefined,
+                  distance: (tt as any).distance || undefined,
+                  latitude: (tt as any).latitude || (tt as any).currentLatitude || matchedArea.latitude || undefined,
+                  longitude: (tt as any).longitude || (tt as any).currentLongitude || matchedArea.longitude || undefined,
+                  licensePlate: (tt as any).licensePlate || null,
+                };
+                
+                companiesArray.push(company);
+              }
+              
+              setCompanies(companiesArray);
+            };
+            
+            await processTowTrucks();
+          } else {
+            setCompanies([]);
+          }
+        } catch (towTruckError) {
+          // Eğer /api/location/nearest yoksa, eski endpoint'i kullan
+          const res = await findNearestCompanies({
+            latitude: geoLocation?.lat,
+            longitude: geoLocation?.lng,
+            provinceId: !geoLocation && provinceId ? Number(provinceId) : undefined,
+            districtId: !geoLocation && districtId ? Number(districtId) : undefined,
+            limit: 20,
+          });
+          setCompanies(res || []);
+        }
       } catch {
         setCompanies([]);
       } finally {
@@ -168,7 +278,7 @@ export default function Home() {
       }
     };
     loadCompanies();
-  }, [provinceId, districtId]);
+  }, [provinceId, districtId, geoLocation]);
 
   const uniqueProvinces = useMemo(() => {
     const map = new Map<number, string>();
@@ -198,12 +308,25 @@ export default function Home() {
     return [company.district, company.city || selectedProvinceName].filter(Boolean).join(", ");
   };
 
+  const mapMarkers = useMemo(() => {
+    if (companies.length === 0) return "";
+    const markers = companies
+      .filter((c) => (c as any).latitude && (c as any).longitude)
+      .map((c) => `${(c as any).latitude},${(c as any).longitude}`)
+      .join("|");
+    return markers;
+  }, [companies]);
+
   const query = mapQueryOverride || getCompanyLocation(companies[0]) || [selectedDistrictName, selectedProvinceName || "Ankara", "Turkiye"].filter(Boolean).join(" ");
 
-  const zoom = districtId ? 13 : 11;
-  const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(
+  const zoom = mapQueryOverride ? 14 : districtId ? 13 : 11;
+  let mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(
     query || "Turkiye"
   )}&output=embed&z=${zoom}&hl=tr&scrollwheel=1`;
+  
+  if (mapMarkers) {
+    mapUrl += `&markers=${encodeURIComponent(mapMarkers)}`;
+  }
 
   useEffect(() => {
     if (authToken) {
@@ -211,6 +334,26 @@ export default function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]);
+
+  // Dropdown dışına tıklanınca kapat
+  useEffect(() => {
+    if (!showProfileMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const dropdown = target.closest(`.${styles.dropdown}`);
+      const userBadgeButton = target.closest(`.${styles.userBadgeButton}`);
+      
+      if (!dropdown && !userBadgeButton) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileMenu]);
 
   const persistSession = (
     tokenValue: string,
@@ -272,6 +415,112 @@ export default function Home() {
     setProfileForm(nextProfile);
     return { nextUser, nextProfile };
   };
+
+  const askGeolocation = (onSuccess: (lat: number, lng: number) => void) => {
+    if (!navigator?.geolocation) {
+      setToast("Tarayici konum izni desteklemiyor.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        onSuccess(latitude, longitude);
+      },
+      () => {
+        setToast("Konum alınamadı, izin verdiğinizden emin olun.");
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  const handleUseMyLocation = () => {
+    askGeolocation((lat, lng) => {
+      const q = `${lat},${lng}`;
+      setMapQueryOverride(q);
+      setGeoLocation({ lat, lng });
+    });
+  };
+
+  const reverseGeocode = async (lat: number, lng: number) => {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "yoldan-cek/1.0" },
+    });
+    if (!res.ok) throw new Error("geocode failed");
+    const data = await res.json();
+    const addr = data?.address || {};
+    const provinceName =
+      addr.state || addr.province || addr.region || addr.state_district || "";
+    const districtName =
+      addr.town ||
+      addr.city ||
+      addr.county ||
+      addr.suburb ||
+      addr.village ||
+      addr.municipality ||
+      "";
+    return {
+      provinceName: provinceName as string,
+      districtName: districtName as string,
+    };
+  };
+
+  const findProvinceId = (name?: string) => {
+    const target = normalizeText(name);
+    if (!target) return undefined;
+    const found = uniqueProvinces.find((p) => normalizeText(p.name) === target);
+    return found?.id;
+  };
+
+  const findDistrictId = (province: District[], name?: string) => {
+    const target = normalizeText(name);
+    if (!target) return undefined;
+    const found = province.find((d) => normalizeText(d.districtName) === target);
+    return found?.districtId;
+  };
+
+  const geocodeAndFillNewTow = async (lat: number, lng: number) => {
+    try {
+      setMapQueryOverride(`${lat},${lng}`);
+      const { provinceName, districtName } = await reverseGeocode(lat, lng);
+      const provId = findProvinceId(provinceName);
+      if (provId) {
+        setProvinceId(String(provId));
+        const fetched = await getDistricts(provId);
+        setDistricts(fetched);
+        const distId = findDistrictId(fetched, districtName);
+        if (distId) setDistrictId(String(distId));
+      }
+      setToast("Konumdan il/ilçe alindi, kontrol edin.");
+    } catch {
+      setToast("Konumdan il/ilçe alinamadi, elle secin.");
+    }
+  };
+
+  const geocodeAndFillEditTow = async () => {
+    if (!editingTowId) return;
+    askGeolocation(async (lat, lng) => {
+      try {
+        const { provinceName, districtName } = await reverseGeocode(lat, lng);
+        const provId = findProvinceId(provinceName);
+        if (provId) {
+          setEditingTowForm((f) => ({ ...f, provinceId: String(provId), districtId: "" }));
+          const fetched = await getDistricts(provId);
+          setEditingDistricts(fetched);
+          const distId = findDistrictId(fetched, districtName);
+          if (distId) {
+            setEditingTowForm((f) => ({ ...f, provinceId: String(provId), districtId: String(distId) }));
+          }
+        }
+        setMapQueryOverride(`${lat},${lng}`);
+        setToast("Konumdan il/ilçe alindi, kontrol edin.");
+      } catch {
+        setToast("Konumdan il/ilçe alinamadi, elle secin.");
+      }
+    });
+  };
+
+  const towListDataRef = useRef<any[]>([]);
   
   const loadTowList = async (tokenValue?: string) => {
     const activeToken = tokenValue || authToken;
@@ -279,6 +528,7 @@ export default function Home() {
     setTowLoading(true);
     try {
       const data = await listTowTrucks(activeToken);
+      towListDataRef.current = data || [];
       console.log("tow api response", JSON.stringify(data, null, 2));
       const provincesToFetch = new Set<number>();
       (data || []).forEach((tow) => {
@@ -438,6 +688,13 @@ export default function Home() {
       fullAddress: user.fullAddress || profileForm.fullAddress,
       email: user.email || profileForm.email,
     });
+    // Mevcut fotoğrafı preview'a yükle
+    if (user?.photoUrl) {
+      setProfilePhotoPreview(user.photoUrl);
+    } else {
+      setProfilePhotoPreview("");
+    }
+    setProfilePhoto(null);
     setShowProfileMenu(false);
     setShowProfileModal(true);
   };
@@ -456,10 +713,12 @@ export default function Home() {
       profileForm.companyName ||
       [profileForm.firstName, profileForm.lastName].filter(Boolean).join(" ").trim() ||
       "Kullanıcı";
+    // Yeni fotoğraf yüklendiyse preview'ı kullan, yoksa mevcut fotoğrafı koru
+    const photoUrl = profilePhotoPreview || user?.photoUrl || undefined;
     const updatedUser = {
       name: displayName,
       company: profileForm.companyName || user?.company,
-      photoUrl: user?.photoUrl,
+      photoUrl: photoUrl,
       email: profileForm.email || user?.email,
       phoneNumber: profileForm.phoneNumber || user?.phoneNumber,
       serviceCity: profileForm.serviceCity || user?.serviceCity,
@@ -470,7 +729,10 @@ export default function Home() {
       persistSession(authToken, updatedUser, profileForm);
     }
     setShowProfileModal(false);
-    setToast("Profiliniz güncellendi");
+    setToast("Profiliniz Guncellendi");
+    // Fotoğraf state'lerini temizle
+    setProfilePhoto(null);
+    setProfilePhotoPreview("");
   };
 
   const openTowList = () => {
@@ -483,7 +745,7 @@ export default function Home() {
 
   const openTowModal = () => {
     setShowProfileMenu(false);
-    setShowTowList(false); // modal �stte olsun diye listeyi kapat
+    setShowTowList(false); // modal ?stte olsun diye listeyi kapat
     setShowTowModal(true);
   };
 
@@ -514,6 +776,7 @@ export default function Home() {
             district: selectedDistrictName || undefined,
           },
         ],
+        driverPhoto: towPhoto,
       });
       setTowList((list) => [
         ...list,
@@ -536,7 +799,13 @@ export default function Home() {
         };
         localStorage.setItem(TOW_LOC_KEY, JSON.stringify(towLocCache.current));
       }
+      
+      // Listeyi yeniden yükle (fotoğraf güncellemesi için)
+      await loadTowList(authToken);
+      
       setTowForm({ name: "", plate: "", notes: "" });
+      setTowPhoto(null);
+      setTowPhotoPreview("");
       setShowTowModal(false);
       setShowTowList(true);
       setToast("Çekici eklendi");
@@ -570,16 +839,16 @@ export default function Home() {
         setTowList((list) =>
           list.map((item) => (item.id === id ? { ...item, isActive: false } : item))
         );
-        setToast("Çekici pasiflestirildi");
+        setToast("Çekici pasifleştirildi");
       } else {
         await activateTowTruck(authToken, id);
         setTowList((list) =>
           list.map((item) => (item.id === id ? { ...item, isActive: true } : item))
         );
-        setToast("Çekici aktiflestirildi");
+        setToast("Çekici aktifleştirildi");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Durum güncellenemedi";
+      const message = err instanceof Error ? err.message : "Durum Güncellenemedi";
       setToast(message);
     }
   };
@@ -605,6 +874,11 @@ export default function Home() {
         selectedDistrictName ||
         "",
     });
+    
+    // Fotoğraf özelliği kaldırıldı
+    setEditingTowPhoto(null);
+    setEditingTowPhotoPreview("");
+    
     const provToLoad =
       current.areaProvinceId ||
       (editingTowForm.provinceId ? Number(editingTowForm.provinceId) : null) ||
@@ -622,6 +896,8 @@ export default function Home() {
     setEditingTowId(null);
     setEditingTowForm({ name: "", plate: "", provinceId: "", districtId: "", cityName: "", districtName: "" });
     setEditingDistricts([]);
+    setEditingTowPhoto(null);
+    setEditingTowPhotoPreview("");
   };
 
   const handleTowEditSave = async (id: number) => {
@@ -643,7 +919,13 @@ export default function Home() {
           : "") ||
         current.areaDistrict ||
         (current.areaDistrictId ? `İlce #${current.areaDistrictId}` : "");
-      const updated = await updateTowTruck(authToken, id, {
+      const updatePayload: {
+        driverName?: string;
+        licensePlate?: string;
+        isActive?: boolean;
+        areas?: { provinceId: number; districtId: number; city?: string; district?: string }[];
+        driverPhoto?: File | null;
+      } = {
         driverName: editingTowForm.name,
         licensePlate: editingTowForm.plate,
         isActive: current.isActive,
@@ -667,7 +949,14 @@ export default function Home() {
                   },
                 ]
               : undefined,
-      });
+      };
+      
+      // Sadece yeni fotoğraf seçildiyse ekle
+      if (editingTowPhoto) {
+        updatePayload.driverPhoto = editingTowPhoto;
+      }
+      
+      const updated = await updateTowTruck(authToken, id, updatePayload);
       const area = (updated as any).operatingAreas?.[0];
       const location = [area?.district, area?.city].filter(Boolean).join(", ");
       if (updated.id) {
@@ -677,26 +966,15 @@ export default function Home() {
         };
         localStorage.setItem(TOW_LOC_KEY, JSON.stringify(towLocCache.current));
       }
-      setTowList((list) =>
-        list.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                name: updated.driverName || editingTowForm.name,
-                plate: updated.licensePlate || editingTowForm.plate,
-                location: location || item.location,
-                areaProvinceId: area?.provinceId ?? item.areaProvinceId,
-                areaDistrictId: area?.districtId ?? item.areaDistrictId,
-                areaCity: area?.city ?? item.areaCity,
-                areaDistrict: area?.district ?? item.areaDistrict,
-                isActive: updated.isActive,
-              }
-            : item
-        )
-      );
+      // Listeyi yeniden yükle (fotoğraf güncellemesi için)
+      await loadTowList(authToken);
+      
       setEditingTowId(null);
-      setEditingTowForm({ name: "", plate: "" });
-      setToast("Çekici güncellendi");
+      setEditingTowForm({ name: "", plate: "", provinceId: "", districtId: "", cityName: "", districtName: "" });
+      setEditingDistricts([]);
+      setEditingTowPhoto(null);
+      setEditingTowPhotoPreview("");
+      setToast("Çekici Güncellendi");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Güncelleme başarısız";
       setToast(message);
@@ -727,66 +1005,94 @@ export default function Home() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <Image src={logo} alt="Yoldan Çek" className={styles.logoImage} priority />
-      </header>
-
-      {toast ? <div className={styles.toast}>{toast}</div> : null}
-
-      <div className={styles.topRight}>
-        {user ? (
-          <div className={styles.userArea}>
-            <button type="button" className={styles.secondary} onClick={openTowModal}>
-              Çekici ekle
-            </button>
-            <button type="button" className={styles.userBadgeButton} onClick={toggleProfileMenu}>
-              {user.photoUrl ? (
-                <img src={user.photoUrl} alt={user.name} className={styles.avatar} />
-              ) : (
-                <div className={styles.avatarPlaceholder}>{initials}</div>
-              )}
-              <div>
-                <div className={styles.userName}>{user.name}</div>
-                {user.company ? <div className={styles.userMeta}>{user.company}</div> : null}
-              </div>
-              <span className={styles.caret}>¡</span>
-            </button>
-            {showProfileMenu ? (
-              <div className={styles.dropdown}>
-                <button className={styles.dropdownItem} type="button" onClick={openTowList}>
-                  Çekicilerim
-                </button>
-                <button className={styles.dropdownItem} type="button" onClick={openProfile}>
-                  Profilim
-                </button>
-                <button className={styles.dropdownItem} type="button" onClick={handleLogout}>
-                  Çıkış
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className={styles.actions}>
-            <button className={styles.secondary} type="button" onClick={() => setShowLogin(true)}>
-              Giriş yap
-            </button>
-            <button className={styles.primary} type="button" onClick={() => setShowRegister(true)}>
-              Kayıt ol
-            </button>
-          </div>
-        )}
+      <div className={styles.topBar}>
+        <button 
+          type="button" 
+          className={styles.logoButton}
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <Image src={logo} alt="Yoldan Çek" className={styles.logoImage} priority />
+        </button>
+        
+        <div className={styles.topBarActions}>
+          {user ? (
+            <div className={styles.userArea}>
+              <button type="button" className={styles.addTowButton} onClick={openTowModal}>
+                <span className={styles.addTowIcon}>+</span>
+                <span>Çekici ekle</span>
+              </button>
+              <button type="button" className={styles.userBadgeButton} onClick={toggleProfileMenu}>
+                {user.photoUrl ? (
+                  <img src={user.photoUrl} alt={user.name} className={styles.avatar} />
+                ) : (
+                  <div className={styles.avatarPlaceholder}>{initials}</div>
+                )}
+                <div>
+                  <div className={styles.userName}>{user.name}</div>
+                  {user.company && user.company !== user.name ? (
+                    <div className={styles.userMeta}>{user.company}</div>
+                  ) : null}
+                </div>
+                <span className={styles.caret}>¡</span>
+              </button>
+              {showProfileMenu ? (
+                <div className={styles.dropdown}>
+                  <button className={styles.dropdownItem} type="button" onClick={openTowList}>
+                    <span className={styles.dropdownText}>Çekicilerim</span>
+                    <span className={styles.dropdownArrow}>→</span>
+                  </button>
+                  <button className={styles.dropdownItem} type="button" onClick={openProfile}>
+                    <span className={styles.dropdownText}>Profil</span>
+                    <span className={styles.dropdownArrow}>→</span>
+                  </button>
+                  <div className={styles.dropdownDivider}></div>
+                  <button className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`} type="button" onClick={handleLogout}>
+                    <span className={styles.dropdownText}>Çıkış</span>
+                    <span className={styles.dropdownArrow}>→</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className={styles.actions}>
+              <button className={styles.secondary} type="button" onClick={() => setShowLogin(true)}>
+                Giriş yap
+              </button>
+              <button className={styles.primary} type="button" onClick={() => setShowRegister(true)}>
+                Kayıt ol
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-                  <section className={styles.panel}>
+      {toast ? (
+        <div 
+          className={styles.toast} 
+          onClick={() => setToast("")}
+          role="alert"
+          style={{ cursor: 'pointer' }}
+        >
+          {toast}
+        </div>
+      ) : null}
+
+      <section className={styles.panel}>
         <div className={styles.panelHeader}>
           <div>
-            <div className={styles.panelTitle}>Konum Sec</div>
+            <div className={styles.panelTitle}>Konum Seç</div>
+            <div className={styles.panelSubtitle}>Yakınındaki çekicileri bulmak için konumunu seç</div>
           </div>
+          <button className={styles.secondary} type="button" onClick={handleUseMyLocation}>
+            Konumumu kullan
+          </button>
         </div>
 
         <div className={styles.controls}>
           <label className={styles.field}>
-            <span>Il</span>
+            <span>İl</span>
             <select
               className={styles.select}
               value={provinceId}
@@ -798,7 +1104,7 @@ export default function Home() {
                 setMapQueryOverride("");
               }}
             >
-              <option value="">Il secin</option>
+              <option value="">İl seçin</option>
               {uniqueProvinces.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -808,7 +1114,7 @@ export default function Home() {
           </label>
 
           <label className={styles.field}>
-            <span>Ilce</span>
+            <span>İlçe</span>
             <select
               className={styles.select}
               value={districtId}
@@ -818,7 +1124,7 @@ export default function Home() {
               }}
               disabled={!provinceId}
             >
-              <option value="">Ilce secin</option>
+              <option value="">İlçe seçin</option>
               {districts.map((d) => (
                 <option key={d.districtId} value={d.districtId}>
                   {d.districtName}
@@ -839,28 +1145,43 @@ export default function Home() {
             title="Harita"
           />
           <div className={styles.mapBadge}>
-            {mapQueryOverride || `${selectedDistrictName || "Ilce sec"} | ${selectedProvinceName || "Il sec"}`}
+            {mapQueryOverride || `${selectedDistrictName || "İlçe seç"} | ${selectedProvinceName || "İl seç"}`}
           </div>
           {companies.length > 0 ? (
             <div className={styles.mapPins}>
-              <div className={styles.mapPinsTitle}>Online Cekiciler</div>
+              <div className={styles.mapPinsTitle}>Online Çekiciler</div>
               <div className={styles.mapPinsList}>
                 {companies.slice(0, 12).map((c, idx) => {
-                  const locText = [c.district, c.city || selectedProvinceName]
+                  const towTruck = c as CompanyDto & { latitude?: number; longitude?: number };
+                  const locText = [towTruck.district, towTruck.city || selectedProvinceName]
                     .filter(Boolean)
                     .join(", ") || "Konum yok";
-                  const targetQuery = locText === "Konum yok" ? selectedProvinceName : locText;
+                  
+                  const targetQuery = towTruck.latitude && towTruck.longitude
+                    ? `${towTruck.latitude},${towTruck.longitude}`
+                    : locText === "Konum yok" ? selectedProvinceName : locText;
+                  
                   return (
                     <button
-                      key={`${c.id || idx}-pin`}
+                      key={`${towTruck.id || idx}-pin`}
                       type="button"
                       className={styles.mapPinButton}
-                      onClick={() => setMapQueryOverride(targetQuery)}
+                      onClick={() => {
+                        if (towTruck.latitude && towTruck.longitude) {
+                          setMapQueryOverride(`${towTruck.latitude},${towTruck.longitude}`);
+                        } else {
+                          setMapQueryOverride(targetQuery);
+                        }
+                      }}
                     >
                       <span className={styles.mapPinDot} />
                       <div className={styles.mapPinText}>
-                        <div className={styles.mapPinName}>{c.companyName || "Cekici"}</div>
-                        <div className={styles.mapPinMeta}>{locText}</div>
+                        <div className={styles.mapPinName}>{towTruck.companyName || "Cekici"}</div>
+                        <div className={styles.mapPinMeta}>
+                          {towTruck.latitude && towTruck.longitude 
+                            ? `${towTruck.latitude.toFixed(4)}, ${towTruck.longitude.toFixed(4)}`
+                            : locText}
+                        </div>
                       </div>
                     </button>
                   );
@@ -877,13 +1198,179 @@ export default function Home() {
         {companiesLoading ? (
           <div className={styles.smallMuted}>Cekiciler yukleniyor...</div>
         ) : companies.length === 0 ? (
-          <div className={styles.smallMuted}>Henuz listelenecek cekici yok.</div>
+          <div className={styles.smallMuted}>Henüz listelenecek çekici yok.</div>
         ) : (
-          <div className={styles.formGrid}>
-            {companies.map((c, idx) => (
-              <div key={`${c.id || idx}-${c.companyName || "cmp"}`} className={styles.companyCard}>
+          <div className={styles.towTrucksGrid}>
+            {companies.map((c, idx) => {
+              const towTruck = c as CompanyDto & { licensePlate?: string | null; latitude?: number; longitude?: number };
+              const basePhone = (towTruck.phoneNumber || "").trim();
+              const cleaned = basePhone.replace(/[^0-9+]/g, "");
+              const withoutPrefixZeros = cleaned.startsWith("+")
+                ? cleaned
+                : cleaned.replace(/^0+/, "");
+              const phoneWithCountry = withoutPrefixZeros
+                ? withoutPrefixZeros.startsWith("+")
+                  ? withoutPrefixZeros
+                  : `+90 ${withoutPrefixZeros}`
+                : "";
+              const phoneHref = phoneWithCountry
+                ? `tel:${phoneWithCountry.replace(/\s+/g, "")}`
+                : undefined;
+              
+              return (
+                <div key={`${towTruck.id || idx}-${towTruck.companyName || "cmp"}`} className={styles.towTruckCard}>
+                  <div className={styles.towTruckCardHeader}>
+                    <div className={styles.towTruckAvatarPlaceholder}>
+                      {(towTruck.companyName || "Ç")[0].toUpperCase()}
+                    </div>
+                    <div className={styles.towTruckInfo}>
+                      <div className={styles.towTruckName}>{towTruck.companyName || "Çekici"}</div>
+                      <div className={styles.towTruckLocation}>
+                        {[towTruck.district, towTruck.city].filter(Boolean).join(", ") || "Konum belirtilmedi"}
+                      </div>
+                    </div>
+                    {towTruck.distance && (
+                      <div className={styles.towTruckDistance}>{towTruck.distance.toFixed(1)} km</div>
+                    )}
+                  </div>
+                  
+                  <div className={styles.towTruckCardBody}>
+                    <div className={styles.towTruckContact}>
+                      <div className={styles.towTruckContactItem}>
+                        <span className={styles.towTruckContactIcon}>📞</span>
+                        <a href={phoneHref} className={styles.towTruckPhone}>
+                          {phoneWithCountry || "Telefon yok"}
+                        </a>
+                      </div>
+                      {towTruck.licensePlate && (
+                        <div className={styles.towTruckContactItem}>
+                          <span className={styles.towTruckContactIcon}>🚗</span>
+                          <span className={styles.towTruckPlate}>{towTruck.licensePlate}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {towTruck.fullAddress && (
+                      <div className={styles.towTruckAddress}>
+                        <span className={styles.towTruckAddressIcon}>📍</span>
+                        <span>{towTruck.fullAddress}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className={styles.towTruckCardFooter}>
+                    <button
+                      className={styles.towTruckDetailButton}
+                      type="button"
+                      onClick={() => setSelectedTowTruck(towTruck)}
+                    >
+                      Detaylı Bilgi
+                    </button>
+                    {phoneHref && (
+                      <a href={phoneHref} className={styles.towTruckCallButton}>
+                        Ara
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Çekici Detay Popup */}
+      {selectedTowTruck && (
+        <div className={styles.modalOverlay} role="dialog" aria-modal="true" onClick={() => setSelectedTowTruck(null)}>
+          <div className={styles.towTruckDetailModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.towTruckDetailHeader}>
+              <button
+                className={styles.modalCloseButton}
+                type="button"
+                onClick={() => setSelectedTowTruck(null)}
+                aria-label="Kapat"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className={styles.towTruckDetailContent}>
+              <div className={styles.towTruckDetailProfile}>
+                <div className={styles.towTruckDetailAvatarPlaceholder}>
+                  {(selectedTowTruck.companyName || "Ç")[0].toUpperCase()}
+                </div>
+                <div className={styles.towTruckDetailName}>{selectedTowTruck.companyName || "Çekici"}</div>
+                <div className={styles.towTruckDetailLocation}>
+                  {[selectedTowTruck.district, selectedTowTruck.city].filter(Boolean).join(", ") || "Konum belirtilmedi"}
+                </div>
+                {selectedTowTruck.distance && (
+                  <div className={styles.towTruckDetailDistance}>
+                    {selectedTowTruck.distance.toFixed(1)} km uzaklıkta
+                  </div>
+                )}
+              </div>
+              
+              <div className={styles.towTruckDetailInfo}>
+                <div className={styles.towTruckDetailInfoItem}>
+                  <div className={styles.towTruckDetailInfoLabel}>Telefon</div>
+                  <div className={styles.towTruckDetailInfoValue}>
+                    {(() => {
+                      const basePhone = (selectedTowTruck.phoneNumber || "").trim();
+                      const cleaned = basePhone.replace(/[^0-9+]/g, "");
+                      const withoutPrefixZeros = cleaned.startsWith("+")
+                        ? cleaned
+                        : cleaned.replace(/^0+/, "");
+                      const phoneWithCountry = withoutPrefixZeros
+                        ? withoutPrefixZeros.startsWith("+")
+                          ? withoutPrefixZeros
+                          : `+90 ${withoutPrefixZeros}`
+                        : "";
+                      const phoneHref = phoneWithCountry
+                        ? `tel:${phoneWithCountry.replace(/\s+/g, "")}`
+                        : undefined;
+                      return phoneHref ? (
+                        <a href={phoneHref} className={styles.towTruckDetailPhoneLink}>
+                          {phoneWithCountry}
+                        </a>
+                      ) : (
+                        <span>Telefon yok</span>
+                      );
+                    })()}
+                  </div>
+                </div>
+                
+                {selectedTowTruck.licensePlate && (
+                  <div className={styles.towTruckDetailInfoItem}>
+                    <div className={styles.towTruckDetailInfoLabel}>Plaka</div>
+                    <div className={styles.towTruckDetailInfoValue}>{selectedTowTruck.licensePlate}</div>
+                  </div>
+                )}
+                
+                {selectedTowTruck.email && (
+                  <div className={styles.towTruckDetailInfoItem}>
+                    <div className={styles.towTruckDetailInfoLabel}>E-posta</div>
+                    <div className={styles.towTruckDetailInfoValue}>{selectedTowTruck.email}</div>
+                  </div>
+                )}
+                
+                {selectedTowTruck.fullAddress && (
+                  <div className={styles.towTruckDetailInfoItem}>
+                    <div className={styles.towTruckDetailInfoLabel}>Adres</div>
+                    <div className={styles.towTruckDetailInfoValue}>{selectedTowTruck.fullAddress}</div>
+                  </div>
+                )}
+                
+                {selectedTowTruck.serviceCity && (
+                  <div className={styles.towTruckDetailInfoItem}>
+                    <div className={styles.towTruckDetailInfoLabel}>Hizmet Bölgesi</div>
+                    <div className={styles.towTruckDetailInfoValue}>{selectedTowTruck.serviceCity}</div>
+                  </div>
+                )}
+              </div>
+              
+              <div className={styles.towTruckDetailActions}>
                 {(() => {
-                  const basePhone = (c.phoneNumber || "").trim();
+                  const basePhone = (selectedTowTruck.phoneNumber || "").trim();
                   const cleaned = basePhone.replace(/[^0-9+]/g, "");
                   const withoutPrefixZeros = cleaned.startsWith("+")
                     ? cleaned
@@ -894,84 +1381,21 @@ export default function Home() {
                       : `+90 ${withoutPrefixZeros}`
                     : "";
                   const phoneHref = phoneWithCountry
-                    ? `tel:${phoneWithCountry.replace(/\\s+/g, "")}`
+                    ? `tel:${phoneWithCountry.replace(/\s+/g, "")}`
                     : undefined;
-                  return (
-                    <>
-                <div className={styles.companyHeader}>
-                  <div>
-                    <div className={styles.companyName}>{c.companyName || c.city || "Cekici"}</div>
-                    <div className={styles.phoneHighlight}>
-                      Telefon:
-                      <a
-                        className={styles.phoneLink}
-                        href={phoneHref}
-                      >
-                        {phoneWithCountry || "-"}
-                      </a>
-                    </div>
-                  </div>
-                  <div className={styles.pill}>
-                    {c.distance ? `${c.distance} km` : c.city || "Online"}
-                  </div>
-                </div>
-                    </>
-                  );
+                  return phoneHref ? (
+                    <a href={phoneHref} className={styles.towTruckDetailCallButton}>
+                      📞 Ara
+                    </a>
+                  ) : null;
                 })()}
-
-                <div className={styles.companyMeta}>
-                  <div>
-                    <div className={styles.metaLabel}>Il/Ilce</div>
-                    <div className={styles.metaValue}>
-                      {[c.district, c.city].filter(Boolean).join(", ") || "Belirtilmedi"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className={styles.metaLabel}>Hizmet</div>
-                    <div className={styles.metaValue}>{c.serviceCity || "-"}</div>
-                  </div>
-                  <div>
-                    <div className={styles.metaLabel}>Adres</div>
-                    <div className={styles.metaValue}>{c.fullAddress || "-"}</div>
-                  </div>
-                </div>
-
-                <div className={styles.buttonRow}>
-                  <button
-                    className={styles.secondary}
-                    type="button"
-                    onClick={() =>
-                      setExpandedCompanyId(
-                        expandedCompanyId === (c.id ?? idx) ? null : (c.id ?? idx)
-                      )
-                    }
-                  >
-                    Detay
-                  </button>
-                </div>
-                {expandedCompanyId === (c.id ?? idx) ? (
-                  <div className={styles.companyDetails}>
-                    <div className={styles.detailRow}>
-                      <span className={styles.metaLabel}>E-posta</span>
-                      <span className={styles.metaValue}>{c.email || "-"}</span>
-                    </div>
-                    <div className={styles.detailRow}>
-                      <span className={styles.metaLabel}>Hizmet Bolgesi</span>
-                      <span className={styles.metaValue}>
-                        {[c.district, c.city].filter(Boolean).join(", ") || "-"}
-                      </span>
-                    </div>
-                    <div className={styles.detailRow}>
-                      <span className={styles.metaLabel}>Servis Il</span>
-                      <span className={styles.metaValue}>{c.serviceCity || "-"}</span>
-                    </div>
-                  </div>
-                ) : null}
               </div>
-            ))}
+            </div>
           </div>
-        )}
-      </section>{showTowModal ? (
+        </div>
+      )}
+
+      {showTowModal ? (
         <div className={styles.modalOverlay} role="dialog" aria-modal="true">
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
@@ -1033,9 +1457,55 @@ export default function Home() {
                 <input
                   className={styles.input}
                   value={towForm.plate}
-                  onChange={(e) => setTowForm({ ...towForm, plate: e.target.value })}
+                  onChange={(e) => {
+                    const formatted = formatLicensePlate(e.target.value);
+                    setTowForm({ ...towForm, plate: formatted });
+                  }}
                   placeholder="34 ABC 123"
+                  maxLength={11}
                 />
+              </label>
+              <label className={styles.field}>
+                <span>Çekici Fotoğrafı</span>
+                <div className={styles.photoUpload}>
+                  {towPhotoPreview ? (
+                    <div className={styles.photoPreview}>
+                      <img src={towPhotoPreview} alt="Preview" className={styles.photoPreviewImage} />
+                      <button
+                        type="button"
+                        className={styles.photoRemoveButton}
+                        onClick={() => {
+                          setTowPhoto(null);
+                          setTowPhotoPreview("");
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <label className={styles.photoUploadLabel}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className={styles.photoInput}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setTowPhoto(file);
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setTowPhotoPreview(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <div className={styles.photoUploadButton}>
+                        📷 Fotoğraf Seç
+                      </div>
+                    </label>
+                  )}
+                </div>
               </label>
               <label className={styles.field}>
                 <span>Not</span>
@@ -1046,6 +1516,20 @@ export default function Home() {
                   placeholder="Opsiyonel not"
                 />
               </label>
+              <div className={styles.buttonRow}>
+                <button
+                  className={styles.secondary}
+                  type="button"
+                  onClick={() =>
+                    askGeolocation((lat, lng) => {
+                      geocodeAndFillNewTow(lat, lng);
+                      setGeoLocation({ lat, lng });
+                    })
+                  }
+                >
+                  Konumumu kullan
+                </button>
+              </div>
             </div>
             <div className={styles.buttonRow}>
               <button className={styles.primary} onClick={handleTowSave} disabled={towLoading}>
@@ -1057,176 +1541,262 @@ export default function Home() {
       ) : null}
 
       {showTowList ? (
-        <div className={styles.modalOverlay} role="dialog" aria-modal="true">
-          <div className={styles.modal}>
+        <div className={styles.modalOverlay} role="dialog" aria-modal="true" onClick={() => setShowTowList(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div>
                 <div className={styles.panelTitle}>Çekicilerim</div>
+                <div className={styles.smallMuted} style={{ marginTop: '4px' }}>
+                  {towList.length} çekici {towList.filter(t => t.isActive).length > 0 && `(${towList.filter(t => t.isActive).length} aktif)`}
+                </div>
               </div>
               <div className={styles.actions}>
-                <button className={styles.secondary} type="button" onClick={openTowModal}>
-                  Yeni çekici
+                <button className={styles.addTowButton} type="button" onClick={openTowModal}>
+                  <span className={styles.addTowIcon}>+</span>
+                  <span>Yeni çekici</span>
                 </button>
-                <button className={styles.secondary} type="button" onClick={() => setShowTowList(false)}>
-                  Kapat
+                <button 
+                  className={styles.modalCloseButton} 
+                  type="button" 
+                  onClick={() => setShowTowList(false)}
+                  aria-label="Kapat"
+                >
+                  ×
                 </button>
               </div>
             </div>
-            {towLoading ? (
-              <div className={styles.smallMuted}>Çekiciler yükleniyor...</div>
-            ) : towList.length === 0 ? (
-              <div className={styles.smallMuted}>Henüz eklenmiş çekici yok.</div>
-            ) : (
-              <div className={styles.formGrid}>
-                {towList.map((item) => (
-                  <div key={item.id} className={styles.field}>
-                    <div className={styles.fieldRow}>
-                      <span>{item.name || "Çekici"}</span>
-                      <span className={styles.smallMuted}>{item.isActive ? "Aktif" : "Pasif"}</span>
-                    </div>
-                    <div className={styles.smallMuted}>Plaka: {item.plate || "-"}</div>
-                    <div className={styles.smallMuted}>
-                      Durum: {item.isActive ? "Aktif" : "Pasif"}
-                    </div>
-                    <div className={styles.smallMuted}>
-                      Il/Ilce:{" "}
-                      {[item.areaDistrict || selectedDistrictName, item.areaCity || selectedProvinceName]
-                        .filter(Boolean)
-                        .join(", ") || item.location || "Belirtilmedi"}
-                    </div>
-                    {editingTowId === item.id ? (
-                      <div className={styles.formGrid}>
-                        <label className={styles.field}>
-                          <span>Ad</span>
-                          <input
-                            className={styles.input}
-                            value={editingTowForm.name}
-                            onChange={(e) =>
-                              setEditingTowForm({ ...editingTowForm, name: e.target.value })
-                            }
-                          />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Plaka</span>
-                          <input
-                            className={styles.input}
-                            value={editingTowForm.plate}
-                            onChange={(e) =>
-                              setEditingTowForm({ ...editingTowForm, plate: e.target.value })
-                            }
-                          />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Il</span>
-                          <select
-                            className={styles.select}
-                            value={editingTowForm.provinceId}
-                            onChange={async (e) => {
-                              const val = e.target.value;
-                              const provName =
-                                uniqueProvinces.find((p) => String(p.id) === val)?.name || "";
-                              setEditingTowForm((form) => ({
-                                ...form,
-                                provinceId: val,
-                                cityName: provName,
-                                districtId: "",
-                                districtName: "",
-                              }));
-                              setEditingDistricts([]);
-                              if (val) {
-                                try {
-                                  const fetched = await getDistricts(Number(val));
-                                  setEditingDistricts(fetched);
-                                } catch {
-                                  setEditingDistricts([]);
-                                }
-                              }
-                            }}
-                          >
-                            <option value="">Il secin</option>
-                            {uniqueProvinces.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className={styles.field}>
-                          <span>Ilce</span>
-                          <select
-                            className={styles.select}
-                            value={editingTowForm.districtId}
-                            onChange={(e) =>
-                              setEditingTowForm({
-                                ...editingTowForm,
-                                districtId: e.target.value,
-                                districtName:
-                                  editingDistricts.find((d) => String(d.districtId) === e.target.value)
-                                    ?.districtName || "",
-                              })
-                            }
-                            disabled={!editingTowForm.provinceId}
-                          >
-                            <option value="">Ilce secin</option>
-                            {editingDistricts.map((d) => (
-                              <option key={d.districtId} value={d.districtId}>
-                                {d.districtName}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+            <div className={styles.modalContent}>
+              {towLoading ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.loadingSpinner}></div>
+                  <div className={styles.smallMuted}>Çekiciler yükleniyor...</div>
+                </div>
+              ) : towList.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyStateIcon}>🚛</div>
+                  <div className={styles.emptyStateTitle}>Henüz çekici eklenmemiş</div>
+                  <div className={styles.emptyStateText}>Yeni çekici eklemek için butona tıklayın</div>
+                  <button className={styles.primary} type="button" onClick={openTowModal}>
+                    + Çekici Ekle
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.towListGrid}>
+                  {towList.map((item) => (
+                    <div key={item.id} className={styles.towListItem}>
+                      <div className={styles.towListItemHeader}>
+                        <div className={styles.towListItemName}>{item.name || "Çekici"}</div>
+                        <span className={`${styles.towListItemStatus} ${item.isActive ? styles.active : styles.inactive}`}>
+                          {item.isActive ? "Aktif" : "Pasif"}
+                        </span>
                       </div>
-                    ) : null}
-                    <div className={styles.buttonRow}>
+                      <div className={styles.towListItemInfo}>
+                        <div className={styles.towListItemInfoRow}>
+                          <span className={styles.towListItemInfoIcon}>🚗</span>
+                          <span className={styles.smallMuted}>Plaka:</span>
+                          <span className={styles.towListItemPlate}>{item.plate || "-"}</span>
+                        </div>
+                        <div className={styles.towListItemInfoRow}>
+                          <span className={styles.towListItemInfoIcon}>📍</span>
+                          <span className={styles.smallMuted}>Konum:</span>
+                          <span className={styles.towListItemInfoValue}>
+                            {[item.areaDistrict || selectedDistrictName, item.areaCity || selectedProvinceName]
+                              .filter(Boolean)
+                              .join(", ") || item.location || "Belirtilmedi"}
+                          </span>
+                        </div>
+                      </div>
                       {editingTowId === item.id ? (
-                        <>
-                          <button
-                            className={styles.primary}
-                            type="button"
-                            onClick={() => handleTowEditSave(item.id)}
-                            disabled={towLoading}
-                          >
-                            Kaydet
-                          </button>
-                          <button
-                            className={styles.secondary}
-                            type="button"
-                            onClick={cancelTowEdit}
-                            disabled={towLoading}
-                          >
-                            Vazgeç
-                          </button>
-                        </>
+                        <div className={styles.towListItemEditForm}>
+                          <div className={styles.formGrid}>
+                            <label className={styles.field}>
+                              <span>Ad</span>
+                              <input
+                                className={styles.input}
+                                value={editingTowForm.name}
+                                onChange={(e) =>
+                                  setEditingTowForm({ ...editingTowForm, name: e.target.value })
+                                }
+                              />
+                            </label>
+                            <label className={styles.field}>
+                              <span>Plaka</span>
+                              <input
+                                className={styles.input}
+                                value={editingTowForm.plate}
+                                onChange={(e) => {
+                                  const formatted = formatLicensePlate(e.target.value);
+                                  setEditingTowForm({ ...editingTowForm, plate: formatted });
+                                }}
+                                placeholder="34 ABC 123"
+                                maxLength={11}
+                              />
+                            </label>
+                            <label className={styles.field}>
+                              <span>Çekici Fotoğrafı</span>
+                              <div className={styles.photoUpload}>
+                                {editingTowPhotoPreview ? (
+                                  <div className={styles.photoPreview}>
+                                    <img src={editingTowPhotoPreview} alt="Preview" className={styles.photoPreviewImage} />
+                                    <button
+                                      type="button"
+                                      className={styles.photoRemoveButton}
+                                      onClick={() => {
+                                        setEditingTowPhoto(null);
+                                        setEditingTowPhotoPreview("");
+                                      }}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <label className={styles.photoUploadLabel}>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className={styles.photoInput}
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                          setEditingTowPhoto(file);
+                                          const reader = new FileReader();
+                                          reader.onloadend = () => {
+                                            setEditingTowPhotoPreview(reader.result as string);
+                                          };
+                                          reader.readAsDataURL(file);
+                                        }
+                                      }}
+                                    />
+                                    <div className={styles.photoUploadButton}>
+                                      📷 Fotoğraf Seç
+                                    </div>
+                                  </label>
+                                )}
+                              </div>
+                            </label>
+                            <label className={styles.field}>
+                              <span>Il</span>
+                              <select
+                                className={styles.select}
+                                value={editingTowForm.provinceId}
+                                onChange={async (e) => {
+                                  const val = e.target.value;
+                                  const provName =
+                                    uniqueProvinces.find((p) => String(p.id) === val)?.name || "";
+                                  setEditingTowForm((form) => ({
+                                    ...form,
+                                    provinceId: val,
+                                    cityName: provName,
+                                    districtId: "",
+                                    districtName: "",
+                                  }));
+                                  setEditingDistricts([]);
+                                  if (val) {
+                                    try {
+                                      const fetched = await getDistricts(Number(val));
+                                      setEditingDistricts(fetched);
+                                    } catch {
+                                      setEditingDistricts([]);
+                                    }
+                                  }
+                                }}
+                              >
+                                <option value="">İl seçin</option>
+                                {uniqueProvinces.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className={styles.field}>
+                              <span>Ilce</span>
+                              <select
+                                className={styles.select}
+                                value={editingTowForm.districtId}
+                                onChange={(e) =>
+                                  setEditingTowForm({
+                                    ...editingTowForm,
+                                    districtId: e.target.value,
+                                    districtName:
+                                      editingDistricts.find((d) => String(d.districtId) === e.target.value)
+                                        ?.districtName || "",
+                                  })
+                                }
+                                disabled={!editingTowForm.provinceId}
+                              >
+                                <option value="">Ilce secin</option>
+                                {editingDistricts.map((d) => (
+                                  <option key={d.districtId} value={d.districtId}>
+                                    {d.districtName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className={styles.buttonRow}>
+                              <button
+                                className={styles.secondary}
+                                type="button"
+                                onClick={() => {
+                                  askGeolocation((lat, lng) => {
+                                    setGeoLocation({ lat, lng });
+                                    geocodeAndFillEditTow();
+                                  });
+                                }}
+                              >
+                                📍 Konumumu kullan
+                              </button>
+                            </div>
+                          </div>
+                          <div className={styles.buttonRow}>
+                            <button
+                              className={styles.primary}
+                              type="button"
+                              onClick={() => handleTowEditSave(item.id)}
+                              disabled={towLoading}
+                            >
+                              {towLoading ? "Kaydediliyor..." : "✓ Kaydet"}
+                            </button>
+                            <button
+                              className={styles.secondary}
+                              type="button"
+                              onClick={cancelTowEdit}
+                              disabled={towLoading}
+                            >
+                              ✕ Vazgeç
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <>
+                        <div className={styles.towListItemActions}>
                           <button
-                            className={styles.secondary}
+                            className={`${styles.secondary} ${styles.towListActionButton}`}
                             type="button"
                             onClick={() => handleTowToggleActive(item.id)}
                           >
-                            {item.isActive ? "Pasiflestir" : "Aktiflestir"}
+                            {item.isActive ? "⏸ Pasiflestir" : "▶ Aktiflestir"}
                           </button>
                           <button
-                            className={styles.secondary}
+                            className={`${styles.secondary} ${styles.towListActionButton}`}
                             type="button"
                             onClick={() => startTowEdit(item.id)}
                           >
-                            Düzenle
+                            ✏️ Düzenle
                           </button>
                           <button
-                            className={styles.secondary}
+                            className={`${styles.secondary} ${styles.towListActionButton} ${styles.deleteButton}`}
                             type="button"
                             onClick={() => handleTowDelete(item.id)}
                           >
-                            Sil
+                            🗑️ Sil
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : null}
@@ -1441,90 +2011,215 @@ export default function Home() {
         </div>
       ) : null}
       {showProfileModal ? (
-        <div className={styles.modalOverlay} role="dialog" aria-modal="true">
-          <div className={styles.modal}>
+        <div className={styles.modalOverlay} role="dialog" aria-modal="true" onClick={() => setShowProfileModal(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div>
                 <div className={styles.panelTitle}>Profilim</div>
+                <div className={styles.smallMuted} style={{ marginTop: '4px' }}>
+                  Profil bilgilerinizi güncelleyin
+                </div>
               </div>
               <button
-                className={styles.secondary}
+                className={styles.modalCloseButton}
                 type="button"
                 onClick={() => setShowProfileModal(false)}
+                aria-label="Kapat"
               >
-                Kapat
+                ×
               </button>
             </div>
-            <div className={styles.formGrid}>
-              <label className={styles.field}>
-                <span>Ad</span>
-                <input
-                  className={styles.input}
-                  value={profileForm.firstName}
-                  onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
-                  placeholder="Adın"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Soyad</span>
-                <input
-                  className={styles.input}
-                  value={profileForm.lastName}
-                  onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
-                  placeholder="Soyadın"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Firma</span>
-                <input
-                  className={styles.input}
-                  value={profileForm.companyName}
-                  onChange={(e) => setProfileForm({ ...profileForm, companyName: e.target.value })}
-                  placeholder="Firma adın"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>E-posta</span>
-                <input
-                  className={styles.input}
-                  type="email"
-                  value={profileForm.email}
-                  onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                  placeholder="ornek@mail.com"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Telefon</span>
-                <input
-                  className={styles.input}
-                  value={profileForm.phoneNumber}
-                  onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })}
-                  placeholder="5xx"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Hizmet Şehri</span>
-                <input
-                  className={styles.input}
-                  value={profileForm.serviceCity}
-                  onChange={(e) => setProfileForm({ ...profileForm, serviceCity: e.target.value })}
-                  placeholder="İl"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Adres</span>
-                <textarea
-                  className={styles.textarea}
-                  value={profileForm.fullAddress}
-                  onChange={(e) => setProfileForm({ ...profileForm, fullAddress: e.target.value })}
-                  placeholder="Adresin"
-                />
-              </label>
-            </div>
-            <div className={styles.buttonRow}>
-              <button className={styles.primary} onClick={handleProfileSave}>
-                Güncelle
-              </button>
+            <div className={styles.modalContent}>
+              <div className={styles.profileHeader}>
+                <div className={styles.profileAvatarSection}>
+                  {profilePhotoPreview ? (
+                    <div className={styles.profileAvatarWrapper}>
+                      <img src={profilePhotoPreview} alt={user?.name || 'Kullanıcı'} className={styles.profileAvatar} />
+                      <button
+                        type="button"
+                        className={styles.profileAvatarRemoveButton}
+                        onClick={() => {
+                          setProfilePhoto(null);
+                          setProfilePhotoPreview("");
+                        }}
+                        aria-label="Fotoğrafı kaldır"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={styles.profileAvatarPlaceholder}>
+                      {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                  )}
+                  <div className={styles.profileAvatarInfo}>
+                    <div className={styles.profileName}>{user?.name || 'Kullanıcı'}</div>
+                    {user?.company && user.company !== user?.name ? (
+                      <div className={styles.smallMuted}>{user.company}</div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className={styles.profilePhotoUpload}>
+                  <label className={styles.profilePhotoUploadLabel}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className={styles.photoInput}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setProfilePhoto(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setProfilePhotoPreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <div className={styles.profilePhotoUploadButton}>
+                      <span className={styles.uploadIcon}>📷</span>
+                      <span>{profilePhotoPreview ? 'Fotoğrafı Değiştir' : 'Şirket Fotoğrafı Ekle'}</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              <div className={styles.profileFormSection}>
+                <div className={styles.sectionTitle}>
+                  <span className={styles.sectionTitleIcon}>👤</span>
+                  Kişisel Bilgiler
+                </div>
+                <div className={styles.formGrid}>
+                  <label className={styles.profileField}>
+                    <span className={styles.fieldLabel}>
+                      <span className={styles.fieldIcon}>✏️</span>
+                      Ad
+                    </span>
+                    <input
+                      className={styles.profileInput}
+                      value={profileForm.firstName}
+                      onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
+                      placeholder="Adınızı girin"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    <span className={styles.fieldLabel}>
+                      <span className={styles.fieldIcon}>✏️</span>
+                      Soyad
+                    </span>
+                    <input
+                      className={styles.profileInput}
+                      value={profileForm.lastName}
+                      onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
+                      placeholder="Soyadınızı girin"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    <span className={styles.fieldLabel}>
+                      <span className={styles.fieldIcon}>🏢</span>
+                      Firma
+                    </span>
+                    <input
+                      className={styles.profileInput}
+                      value={profileForm.companyName}
+                      onChange={(e) => setProfileForm({ ...profileForm, companyName: e.target.value })}
+                      placeholder="Firma adınızı girin"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className={styles.profileFormSection}>
+                <div className={styles.sectionTitle}>
+                  <span className={styles.sectionTitleIcon}>📧</span>
+                  İletişim Bilgileri
+                </div>
+                <div className={styles.formGrid}>
+                  <label className={styles.profileField}>
+                    <span className={styles.fieldLabel}>
+                      <span className={styles.fieldIcon}>📧</span>
+                      E-posta
+                    </span>
+                    <input
+                      className={styles.profileInput}
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      placeholder="ornek@mail.com"
+                    />
+                  </label>
+                  <label className={styles.profileField}>
+                    <span className={styles.fieldLabel}>
+                      <span className={styles.fieldIcon}>📱</span>
+                      Telefon
+                    </span>
+                    <input
+                      className={styles.profileInput}
+                      value={profileForm.phoneNumber}
+                      onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })}
+                      placeholder="+90 5xx xxx xx xx"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className={styles.profileFormSection}>
+                <div className={styles.sectionTitle}>
+                  <span className={styles.sectionTitleIcon}>📍</span>
+                  Konum Bilgileri
+                </div>
+                <div className={styles.formGrid}>
+                  <label className={styles.profileField}>
+                    <span className={styles.fieldLabel}>
+                      <span className={styles.fieldIcon}>🏙️</span>
+                      Hizmet Şehri
+                    </span>
+                    <input
+                      className={styles.profileInput}
+                      value={profileForm.serviceCity}
+                      onChange={(e) => setProfileForm({ ...profileForm, serviceCity: e.target.value })}
+                      placeholder="Hizmet verdiğiniz şehir"
+                    />
+                  </label>
+                  <label className={styles.profileField} style={{ gridColumn: '1 / -1' }}>
+                    <span className={styles.fieldLabel}>
+                      <span className={styles.fieldIcon}>📍</span>
+                      Adres
+                    </span>
+                    <textarea
+                      className={styles.profileTextarea}
+                      value={profileForm.fullAddress}
+                      onChange={(e) => setProfileForm({ ...profileForm, fullAddress: e.target.value })}
+                      placeholder="Detaylı adres bilgisi"
+                      rows={4}
+                    />
+                  </label>
+                  <div className={styles.buttonRow} style={{ gridColumn: '1 / -1' }}>
+                    <button
+                      className={styles.locationButton}
+                      type="button"
+                      onClick={() =>
+                        askGeolocation((lat, lng) => {
+                          const locText = `Konum: ${lat.toFixed(5)},${lng.toFixed(5)}`;
+                          setProfileForm((f) => ({
+                            ...f,
+                            fullAddress: f.fullAddress ? `${f.fullAddress} | ${locText}` : locText,
+                          }));
+                          setToast("Konum eklendi, gerekirse il/ilceyi elle yazabilirsiniz.");
+                          setGeoLocation({ lat, lng });
+                        })
+                      }
+                    >
+                      <span className={styles.buttonIcon}>📍</span>
+                      <span>Konumumu Kullan</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className={styles.profileActions}>
+                <button className={styles.profileSaveButton} onClick={handleProfileSave}>
+                  <span className={styles.buttonIcon}>✓</span>
+                  <span>Profilimi Güncelle</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1532,6 +2227,10 @@ export default function Home() {
     </div>
   );
 }
+
+
+
+
 
 
 

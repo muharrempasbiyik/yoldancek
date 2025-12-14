@@ -54,3 +54,62 @@ textarea {
   font-family: inherit;
   color: var(--ink);
 }
+
+/* Next.js watermark ve geliştirme araçlarını gizle */
+#__next-build-watcher,
+[data-nextjs-toast],
+[data-nextjs-dialog],
+[data-nextjs-router],
+[data-nextjs-scroll-focus-boundary] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Sol altta duran yuvarlak N ikonunu gizle - Tüm olası kombinasyonlar */
+div[style*="position: fixed"][style*="bottom: 0"][style*="left: 0"],
+div[style*="position:fixed"][style*="bottom:0"][style*="left:0"],
+div[style*="position: fixed"][style*="left: 0"][style*="bottom: 0"],
+div[style*="position:fixed"][style*="left:0"][style*="bottom:0"],
+div[style*="position: fixed"][style*="bottom"][style*="left"],
+div[style*="position:fixed"][style*="bottom"][style*="left"],
+div[style*="border-radius: 50%"][style*="position: fixed"],
+div[style*="border-radius:50%"][style*="position:fixed"],
+div[style*="border-radius"][style*="position: fixed"][style*="bottom"],
+div[style*="border-radius"][style*="position:fixed"][style*="bottom"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  z-index: -9999 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Sol altta küçük yuvarlak elementler (N ikonu için) - Daha genel */
+body > div[style*="position: fixed"][style*="bottom: 0"][style*="left: 0"],
+body > div[style*="position:fixed"][style*="bottom:0"][style*="left:0"],
+html > body > div[style*="position: fixed"][style*="bottom"],
+html > body > div[style*="position:fixed"][style*="bottom"],
+body > div[style*="left: 0"][style*="bottom: 0"],
+body > div[style*="left:0"][style*="bottom:0"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Tüm fixed position elementleri sol altta ise gizle */
+*[style*="position: fixed"][style*="left: 0"][style*="bottom: 0"],
+*[style*="position:fixed"][style*="left:0"][style*="bottom:0"],
+*[style*="position: fixed"][style*="left: 0"][style*="bottom"],
+*[style*="position:fixed"][style*="left:0"][style*="bottom"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}

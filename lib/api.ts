@@ -1,6 +1,6 @@
 ﻿const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ||
-  "http://server.muhammedeminkecik.com.tr:5002";
+  "http://server.muhammedeminkecik.com.tr:5000";
 
 export type City = {
   id?: string;
@@ -97,7 +97,7 @@ async function api<T>(path: string, options: ApiOptions = {}) {
     const message =
       (data as { message?: string })?.message ||
       res.statusText ||
-      "Ä°stek baÅŸarÄ±sÄ±z";
+      "Istek basarisiz";
     throw new Error(message);
   }
   return data;
@@ -139,7 +139,7 @@ export async function updateCompany(
   token: string | undefined,
   payload: Partial<CompanyRegistrationDto>
 ) {
-  if (!token) throw new Error("Oturum bulunamadi±");
+  if (!token) throw new Error("Oturum bulunamadi");
   return api<CompanyDto>("/api/Companies/me", {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -164,6 +164,23 @@ export async function findNearestCompanies(params: {
   return api<CompanyDto[]>(`/api/Companies/nearest${qs ? `?${qs}` : ""}`);
 }
 
+export async function findNearestTowTrucks(params: {
+  latitude?: number;
+  longitude?: number;
+  limit?: number;
+  provinceId?: number;
+  districtId?: number;
+}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      query.set(key, String(value));
+    }
+  });
+  const qs = query.toString();
+  return api<TowTruck[]>(`/api/location/nearest${qs ? `?${qs}` : ""}`);
+}
+
 export async function createTicket(payload: TicketDto) {
   return api("/api/Tickets", {
     method: "POST",
@@ -181,7 +198,7 @@ export async function setTicketStatus(
   id: number,
   status: number
 ) {
-  if (!token) throw new Error("Oturum bulunamadi±");
+  if (!token) throw new Error("Oturum bulunamadi");
   return api(`/api/Tickets/${id}/status`, {
     method: "PUT",
     body: JSON.stringify(status),
@@ -189,9 +206,16 @@ export async function setTicketStatus(
   });
 }
 
-export async function listTowTrucks(token?: string) {
+export async function listTowTrucks(
+  token?: string,
+  options: { includeInactive?: boolean } = {}
+) {
   if (!token) return [];
-  return api<TowTruck[]>("/api/TowTrucks/my", { token });
+  const query = new URLSearchParams();
+  const includeInactive = options.includeInactive ?? true;
+  query.set("includeInactive", String(includeInactive));
+  const qs = query.toString();
+  return api<TowTruck[]>(`/api/TowTrucks/my${qs ? `?${qs}` : ""}`, { token });
 }
 
 export async function addTowTruck(
@@ -200,6 +224,7 @@ export async function addTowTruck(
     licensePlate: string;
     driverName: string;
     areas: { provinceId: number; districtId: number; city?: string }[];
+    driverPhoto?: File | null;
   }
 ) {
   if (!token) throw new Error("Oturum bulunamadi");
@@ -207,6 +232,9 @@ export async function addTowTruck(
   form.append("LicensePlate", payload.licensePlate);
   form.append("DriverName", payload.driverName);
   form.append("AreasJson", JSON.stringify(payload.areas));
+  if (payload.driverPhoto) {
+    form.append("driverPhoto", payload.driverPhoto);
+  }
 
   const res = await fetch(`${API_BASE}/api/TowTrucks`, {
     method: "POST",
@@ -229,6 +257,7 @@ export async function updateTowTruck(
     driverName?: string;
     isActive?: boolean;
     areas?: { provinceId: number; districtId: number; city?: string; district?: string }[];
+    driverPhoto?: File | null;
   }
 ) {
   if (!token) throw new Error("Oturum bulunamadi");
@@ -237,6 +266,9 @@ export async function updateTowTruck(
   if (payload.driverName !== undefined) form.append("DriverName", payload.driverName);
   if (payload.isActive !== undefined) form.append("IsActive", String(payload.isActive));
   if (payload.areas) form.append("AreasJson", JSON.stringify(payload.areas));
+  if (payload.driverPhoto) {
+    form.append("driverPhoto", payload.driverPhoto);
+  }
 
   const res = await fetch(`${API_BASE}/api/TowTrucks/${id}`, {
     method: "PUT",
@@ -284,3 +316,6 @@ export async function deleteTowTruck(token: string | undefined, id: number) {
     token,
   });
 }
+
+
+
