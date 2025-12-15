@@ -94,6 +94,7 @@ export default function Home() {
       areaDistrictId?: number;
       areaCity?: string;
       areaDistrict?: string;
+      photoUrl?: string | null;
     }[]
   >([]);
   const [towLoading, setTowLoading] = useState<boolean>(false);
@@ -116,7 +117,7 @@ export default function Home() {
   const [expandedCompanyId, setExpandedCompanyId] = useState<number | string | null>(null);
   const [mapQueryOverride, setMapQueryOverride] = useState<string>("");
   const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [selectedTowTruck, setSelectedTowTruck] = useState<CompanyDto & { licensePlate?: string | null } | null>(null);
+  const [selectedTowTruck, setSelectedTowTruck] = useState<CompanyDto & { licensePlate?: string | null; driverPhotoUrl?: string | null } | null>(null);
 
   const normalizeText = (val?: string) =>
     (val || "")
@@ -235,7 +236,7 @@ export default function Home() {
                   return matchesProvince && matchesDistrict;
                 }) || areas[0] || {}) as any;
                 
-                const company: CompanyDto & { licensePlate?: string | null; latitude?: number; longitude?: number } = {
+                const company: CompanyDto & { licensePlate?: string | null; latitude?: number; longitude?: number; driverPhotoUrl?: string | null } = {
                   id: tt.id || Date.now() + Math.random(),
                   companyName: (tt as any).driverName || (tt as any).licensePlate || "Çekici",
                   phoneNumber: (tt as any).companyPhone || "",
@@ -248,6 +249,11 @@ export default function Home() {
                   latitude: (tt as any).latitude || (tt as any).currentLatitude || matchedArea.latitude || undefined,
                   longitude: (tt as any).longitude || (tt as any).currentLongitude || matchedArea.longitude || undefined,
                   licensePlate: (tt as any).licensePlate || null,
+                  driverPhotoUrl: (tt as any).driverPhotoUrl 
+                    ? ((tt as any).driverPhotoUrl.startsWith('http') 
+                        ? (tt as any).driverPhotoUrl 
+                        : `${process.env.NEXT_PUBLIC_API_BASE || "http://server.muhammedeminkecik.com.tr:5000"}${(tt as any).driverPhotoUrl.startsWith('/') ? '' : '/'}${(tt as any).driverPhotoUrl}`)
+                    : null,
                 };
                 
                 companiesArray.push(company);
@@ -560,7 +566,6 @@ export default function Home() {
     try {
       const data = await listTowTrucks(activeToken);
       towListDataRef.current = data || [];
-      console.log("tow api response", JSON.stringify(data, null, 2));
       const provincesToFetch = new Set<number>();
       (data || []).forEach((tow) => {
         const area = (tow as any).operatingAreas?.[0];
@@ -634,6 +639,11 @@ export default function Home() {
             areaDistrictId: area?.districtId ?? districtIdVal,
             areaCity: area?.city || undefined,
             areaDistrict: area?.district || cachedDistrict || districtFromState || undefined,
+            photoUrl: (tow as any).driverPhotoUrl 
+              ? ((tow as any).driverPhotoUrl.startsWith('http') 
+                  ? (tow as any).driverPhotoUrl 
+                  : `${process.env.NEXT_PUBLIC_API_BASE || "http://server.muhammedeminkecik.com.tr:5000"}${(tow as any).driverPhotoUrl.startsWith('/') ? '' : '/'}${(tow as any).driverPhotoUrl}`)
+              : null,
           };
         })
       );
@@ -1183,7 +1193,7 @@ export default function Home() {
               <div className={styles.mapPinsTitle}>Online Çekiciler</div>
               <div className={styles.mapPinsList}>
                 {companies.slice(0, 12).map((c, idx) => {
-                  const towTruck = c as CompanyDto & { latitude?: number; longitude?: number };
+                  const towTruck = c as CompanyDto & { latitude?: number; longitude?: number; driverPhotoUrl?: string | null };
                   const locText = [towTruck.district, towTruck.city || selectedProvinceName]
                     .filter(Boolean)
                     .join(", ") || "Konum yok";
@@ -1205,7 +1215,25 @@ export default function Home() {
                         }
                       }}
                     >
-                      <span className={styles.mapPinDot} />
+                      {towTruck.driverPhotoUrl ? (
+                        <img 
+                          src={towTruck.driverPhotoUrl} 
+                          alt={towTruck.companyName || "Çekici"}
+                          className={styles.mapPinAvatar}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const placeholder = target.nextElementSibling as HTMLElement;
+                            if (placeholder) placeholder.style.display = 'inline-block';
+                          }}
+                        />
+                      ) : null}
+                      {!towTruck.driverPhotoUrl && (
+                        <span className={styles.mapPinDot} />
+                      )}
+                      {towTruck.driverPhotoUrl && (
+                        <span className={styles.mapPinDot} style={{ display: 'none' }} />
+                      )}
                       <div className={styles.mapPinText}>
                         <div className={styles.mapPinName}>{towTruck.companyName || "Cekici"}</div>
                         <div className={styles.mapPinMeta}>
@@ -1251,9 +1279,29 @@ export default function Home() {
               return (
                 <div key={`${towTruck.id || idx}-${towTruck.companyName || "cmp"}`} className={styles.towTruckCard}>
                   <div className={styles.towTruckCardHeader}>
-                    <div className={styles.towTruckAvatarPlaceholder}>
-                      {(towTruck.companyName || "Ç")[0].toUpperCase()}
-                    </div>
+                    {(towTruck as any).driverPhotoUrl ? (
+                      <img 
+                        src={(towTruck as any).driverPhotoUrl} 
+                        alt={towTruck.companyName || "Çekici"}
+                        className={styles.towTruckAvatar}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const placeholder = target.nextElementSibling as HTMLElement;
+                          if (placeholder) placeholder.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    {!(towTruck as any).driverPhotoUrl && (
+                      <div className={styles.towTruckAvatarPlaceholder}>
+                        {(towTruck.companyName || "Ç")[0].toUpperCase()}
+                      </div>
+                    )}
+                    {(towTruck as any).driverPhotoUrl && (
+                      <div className={styles.towTruckAvatarPlaceholder} style={{ display: 'none' }}>
+                        {(towTruck.companyName || "Ç")[0].toUpperCase()}
+                      </div>
+                    )}
                     <div className={styles.towTruckInfo}>
                       <div className={styles.towTruckName}>{towTruck.companyName || "Çekici"}</div>
                       <div className={styles.towTruckLocation}>
@@ -1327,9 +1375,29 @@ export default function Home() {
             
             <div className={styles.towTruckDetailContent}>
               <div className={styles.towTruckDetailProfile}>
-                <div className={styles.towTruckDetailAvatarPlaceholder}>
-                  {(selectedTowTruck.companyName || "Ç")[0].toUpperCase()}
-                </div>
+                {(selectedTowTruck as any).driverPhotoUrl ? (
+                  <img 
+                    src={(selectedTowTruck as any).driverPhotoUrl} 
+                    alt={selectedTowTruck.companyName || "Çekici"}
+                    className={styles.towTruckDetailAvatar}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const placeholder = target.nextElementSibling as HTMLElement;
+                      if (placeholder) placeholder.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                {!(selectedTowTruck as any).driverPhotoUrl && (
+                  <div className={styles.towTruckDetailAvatarPlaceholder}>
+                    {(selectedTowTruck.companyName || "Ç")[0].toUpperCase()}
+                  </div>
+                )}
+                {(selectedTowTruck as any).driverPhotoUrl && (
+                  <div className={styles.towTruckDetailAvatarPlaceholder} style={{ display: 'none' }}>
+                    {(selectedTowTruck.companyName || "Ç")[0].toUpperCase()}
+                  </div>
+                )}
                 <div className={styles.towTruckDetailName}>{selectedTowTruck.companyName || "Çekici"}</div>
                 <div className={styles.towTruckDetailLocation}>
                   {[selectedTowTruck.district, selectedTowTruck.city].filter(Boolean).join(", ") || "Konum belirtilmedi"}
@@ -1616,6 +1684,17 @@ export default function Home() {
                   {towList.map((item) => (
                     <div key={item.id} className={styles.towListItem}>
                       <div className={styles.towListItemHeader}>
+                        {item.photoUrl ? (
+                          <img 
+                            src={item.photoUrl} 
+                            alt={item.name || "Çekici"}
+                            className={styles.towListItemAvatar}
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                            }}
+                          />
+                        ) : null}
                         <div className={styles.towListItemName}>{item.name || "Çekici"}</div>
                         <span className={`${styles.towListItemStatus} ${item.isActive ? styles.active : styles.inactive}`}>
                           {item.isActive ? "Aktif" : "Pasif"}
@@ -1834,147 +1913,175 @@ export default function Home() {
 
       {showRegister ? (
         <div className={styles.modalOverlay} role="dialog" aria-modal="true">
-          <div className={styles.modal}>
-            <div className={styles.modalHeader}>
-              <div>
-                <div className={styles.panelTitle}>Kayıt Ol</div>
+          <div className={styles.registerModal}>
+            <div className={styles.registerHeader}>
+              <div className={styles.registerLogoWrapper}>
+                <Image src={logo} alt="Yoldan Çek" className={styles.registerLogo} priority />
               </div>
+              <h2 className={styles.registerTitle}>Hesap Oluştur</h2>
+              <p className={styles.registerSubtitle}>Yeni hesabınızı oluşturun ve başlayın</p>
               <button
-                className={styles.secondary}
+                className={styles.registerCloseButton}
                 type="button"
                 onClick={() => setShowRegister(false)}
+                aria-label="Kapat"
               >
-                Kapat
+                ×
               </button>
             </div>
             {toast ? <div className={styles.toast}>{toast}</div> : null}
-            <div className={styles.formGrid}>
-              <label className={styles.field}>
-                <span>Ad</span>
-                <input
-                  className={styles.input}
-                  value={registerForm.firstName}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, firstName: e.target.value })
-                  }
-                  placeholder="Adınız"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Soyad</span>
-                <input
-                  className={styles.input}
-                  value={registerForm.lastName}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, lastName: e.target.value })
-                  }
-                  placeholder="Soyadınız"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Firma Adı</span>
-                <input
-                  className={styles.input}
-                  value={registerForm.companyName}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, companyName: e.target.value })
-                  }
-                  placeholder="Örn: Mavi Oto"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Telefon</span>
-                <input
-                  className={styles.input}
-                  value={registerForm.phoneNumber}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, phoneNumber: e.target.value })
-                  }
-                  placeholder="+90 5xx xxx xx xx"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>E-posta</span>
-                <input
-                  className={styles.input}
-                  type="email"
-                  value={registerForm.email}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, email: e.target.value })
-                  }
-                  placeholder="firma@ornek.com"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Şifre</span>
-                <input
-                  className={styles.input}
-                  type="password"
-                  value={registerForm.password}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, password: e.target.value })
-                  }
-                  placeholder="Minimum 6 karakter"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Hizmet Şehri</span>
-                <input
-                  className={styles.input}
-                  value={registerForm.serviceCity}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, serviceCity: e.target.value })
-                  }
-                  placeholder="İl / bölge"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Açık Adres</span>
-                <textarea
-                  className={styles.textarea}
-                  value={registerForm.fullAddress}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, fullAddress: e.target.value })
-                  }
-                  placeholder="Adres"
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Avatar (opsiyonel)</span>
-                <input
-                  className={styles.input}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        const url = String(ev.target?.result || "");
-                        setPhotoPreview(url);
-                      };
-                      reader.readAsDataURL(file);
+            <div className={styles.registerForm}>
+              <div className={styles.registerFormGrid}>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>Ad</span>
+                  <input
+                    className={styles.registerInput}
+                    value={registerForm.firstName}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, firstName: e.target.value })
                     }
-                  }}
-                />
-                <div className={styles.avatarRow}>
-                  {photoPreview ? (
-                    <img src={photoPreview} alt="Önizleme" className={styles.avatar} />
-                  ) : (
-                    <div className={styles.avatarPlaceholderSmall}>{initials}</div>
-                  )}
-                  <span className={styles.smallMuted}>Opsiyonel.</span>
-                </div>
-              </label>
-            </div>
-            <div className={styles.buttonRow}>
+                    placeholder="Adınız"
+                  />
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>Soyad</span>
+                  <input
+                    className={styles.registerInput}
+                    value={registerForm.lastName}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, lastName: e.target.value })
+                    }
+                    placeholder="Soyadınız"
+                  />
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>Firma Adı</span>
+                  <input
+                    className={styles.registerInput}
+                    value={registerForm.companyName}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, companyName: e.target.value })
+                    }
+                    placeholder="Örn: Mavi Oto"
+                  />
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>Telefon</span>
+                  <input
+                    className={styles.registerInput}
+                    value={registerForm.phoneNumber}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, phoneNumber: e.target.value })
+                    }
+                    placeholder="+90 5xx xxx xx xx"
+                  />
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>E-posta</span>
+                  <input
+                    className={styles.registerInput}
+                    type="email"
+                    value={registerForm.email}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, email: e.target.value })
+                    }
+                    placeholder="firma@ornek.com"
+                  />
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>Şifre</span>
+                  <input
+                    className={styles.registerInput}
+                    type="password"
+                    value={registerForm.password}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, password: e.target.value })
+                    }
+                    placeholder="Minimum 6 karakter"
+                  />
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>Hizmet Şehri</span>
+                  <input
+                    className={styles.registerInput}
+                    value={registerForm.serviceCity}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, serviceCity: e.target.value })
+                    }
+                    placeholder="İl / bölge"
+                  />
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>Açık Adres</span>
+                  <textarea
+                    className={styles.registerTextarea}
+                    value={registerForm.fullAddress}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, fullAddress: e.target.value })
+                    }
+                    placeholder="Adres"
+                  />
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>Avatar (opsiyonel)</span>
+                  <input
+                    className={styles.registerFileInput}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const url = String(ev.target?.result || "");
+                          setPhotoPreview(url);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <div className={styles.registerAvatarRow}>
+                    {photoPreview ? (
+                      <img src={photoPreview} alt="Önizleme" className={styles.registerAvatar} />
+                    ) : (
+                      <div className={styles.registerAvatarPlaceholder}>{initials}</div>
+                    )}
+                    <span className={styles.registerAvatarHint}>Opsiyonel</span>
+                  </div>
+                </label>
+              </div>
               <button
-                className={styles.primary}
+                className={styles.registerSubmitButton}
                 onClick={handleRegister}
                 disabled={registering}
               >
-                {registering ? "Kaydediliyor..." : "Kayıt ol"}
+                {registering ? (
+                  <>
+                    <span className={styles.registerButtonLoader}></span>
+                    Kaydediliyor...
+                  </>
+                ) : (
+                  <>
+                    <span>Kayıt Ol</span>
+                    <span className={styles.registerButtonArrow}>→</span>
+                  </>
+                )}
               </button>
+              <div className={styles.registerFooter}>
+                <p className={styles.registerFooterText}>
+                  Zaten hesabınız var mı?{" "}
+                  <button
+                    type="button"
+                    className={styles.registerFooterLink}
+                    onClick={() => {
+                      setShowRegister(false);
+                      setShowLogin(true);
+                    }}
+                  >
+                    Giriş Yap
+                  </button>
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -1982,61 +2089,92 @@ export default function Home() {
 
       {showLogin ? (
         <div className={styles.modalOverlay} role="dialog" aria-modal="true">
-          <div className={styles.modal}>
-            <div className={styles.modalHeader}>
-              <div>
-                <div className={styles.panelTitle}>Giriş Yap</div>
+          <div className={styles.loginModal}>
+            <div className={styles.loginHeader}>
+              <div className={styles.loginLogoWrapper}>
+                <Image src={logo} alt="Yoldan Çek" className={styles.loginLogo} priority />
               </div>
+              <h2 className={styles.loginTitle}>Hoş Geldiniz</h2>
+              <p className={styles.loginSubtitle}>Hesabınıza giriş yapın</p>
               <button
-                className={styles.secondary}
+                className={styles.loginCloseButton}
                 type="button"
                 onClick={() => setShowLogin(false)}
+                aria-label="Kapat"
               >
-                Kapat
+                ×
               </button>
             </div>
             {toast ? <div className={styles.toast}>{toast}</div> : null}
-            <div className={styles.formGrid}>
-              <label className={styles.field}>
-                <span>E-posta</span>
+            <div className={styles.loginForm}>
+              <label className={styles.loginField}>
+                <span className={styles.loginFieldLabel}>
+                  E-posta Adresi
+                </span>
                 <input
-                  className={styles.input}
+                  className={styles.loginInput}
                   type="email"
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                  placeholder="firma@ornek.com"
+                  placeholder="ornek@firma.com"
                 />
               </label>
-              <label className={styles.field}>
-                <span>Şifre</span>
-                <div className={styles.passwordWrap}>
+              <label className={styles.loginField}>
+                <span className={styles.loginFieldLabel}>
+                  Şifre
+                </span>
+                <div className={styles.loginPasswordWrap}>
                   <input
-                    className={styles.input}
+                    className={styles.loginInput}
                     type={showPassword ? "text" : "password"}
                     value={loginForm.password}
                     onChange={(e) =>
                       setLoginForm({ ...loginForm, password: e.target.value })
                     }
-                    placeholder="******"
+                    placeholder="Şifrenizi girin"
                   />
                   <button
                     type="button"
-                    className={styles.eyeButton}
+                    className={styles.loginEyeButton}
                     onClick={() => setShowPassword((p) => !p)}
+                    aria-label={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
                   >
-                    {showPassword ? "Gizle" : "Göster"}
+                    {showPassword ? "👁️" : "👁️‍🗨️"}
                   </button>
                 </div>
               </label>
-            </div>
-            <div className={styles.buttonRow}>
               <button
-                className={styles.primary}
+                className={styles.loginSubmitButton}
                 onClick={handleLogin}
                 disabled={registering}
               >
-                {registering ? "Giriş yapılıyor..." : "Giriş yap"}
+                {registering ? (
+                  <>
+                    <span className={styles.loginButtonLoader}></span>
+                    Giriş yapılıyor...
+                  </>
+                ) : (
+                  <>
+                    <span>Giriş Yap</span>
+                    <span className={styles.loginButtonArrow}>→</span>
+                  </>
+                )}
               </button>
+              <div className={styles.loginFooter}>
+                <p className={styles.loginFooterText}>
+                  Hesabınız yok mu?{" "}
+                  <button
+                    type="button"
+                    className={styles.loginFooterLink}
+                    onClick={() => {
+                      setShowLogin(false);
+                      setShowRegister(true);
+                    }}
+                  >
+                    Kayıt Ol
+                  </button>
+                </p>
+              </div>
             </div>
           </div>
         </div>

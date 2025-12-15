@@ -590,6 +590,20 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.towListItemAvatar {
+  width: 50px;
+  height: 50px;
+  min-width: 50px;
+  min-height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  border: 2px solid rgba(105, 215, 255, 0.3);
+  flex-shrink: 0;
+  background: rgba(23, 32, 56, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
 .towListItemName {
   font-size: 18px;
   font-weight: 700;
@@ -1212,6 +1226,20 @@
     padding: 12px 24px;
     font-size: 15px;
   }
+
+  .mapPinAvatar {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+  }
+
+  .towListItemAvatar {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
 }
 
 .mapWrap {
@@ -1267,10 +1295,10 @@
   right: 12px;
   background: linear-gradient(155deg, rgba(14, 22, 45, 0.95), rgba(12, 16, 33, 0.95));
   border: 1px solid rgba(105, 215, 255, 0.3);
-  border-radius: 16px;
-  padding: 16px;
-  max-width: 280px;
-  max-height: 400px;
+  border-radius: 14px;
+  padding: 12px;
+  max-width: 240px;
+  max-height: 320px;
   overflow: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(105, 215, 255, 0.1);
   backdrop-filter: blur(10px);
@@ -1297,25 +1325,25 @@
 
 .mapPinsTitle {
   font-weight: 800;
-  font-size: 16px;
-  margin-bottom: 12px;
+  font-size: 14px;
+  margin-bottom: 10px;
   color: #e7f7ff;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .mapPinsList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mapPinButton {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
   background: linear-gradient(135deg, rgba(105, 215, 255, 0.08), rgba(123, 109, 255, 0.05));
   border: 1px solid rgba(105, 215, 255, 0.2);
   color: inherit;
@@ -1350,15 +1378,29 @@
 }
 
 .mapPinDot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   background: linear-gradient(135deg, #69d7ff, #4fb3d9);
   border-radius: 50%;
-  box-shadow: 0 0 0 3px rgba(105, 215, 255, 0.2), 0 0 10px rgba(105, 215, 255, 0.4);
+  box-shadow: 0 0 0 2px rgba(105, 215, 255, 0.2), 0 0 8px rgba(105, 215, 255, 0.4);
   flex-shrink: 0;
   animation: pinPulse 2s ease-in-out infinite;
   position: relative;
   z-index: 1;
+}
+
+.mapPinAvatar {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  border: 2px solid rgba(105, 215, 255, 0.3);
+  flex-shrink: 0;
+  background: rgba(23, 32, 56, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .mapPinText {
@@ -1370,11 +1412,12 @@
 }
 
 .mapPinName {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 800;
   color: #e7f7ff;
   margin-bottom: 2px;
   transition: color 0.2s ease;
+  line-height: 1.3;
 }
 
 .mapPinButton:hover .mapPinName {
@@ -1382,9 +1425,10 @@
 }
 
 .mapPinMeta {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
   transition: color 0.2s ease;
+  line-height: 1.3;
 }
 
 .mapPinButton:hover .mapPinMeta {
@@ -1760,6 +1804,129 @@
   padding: 20px;
   z-index: 50;
   animation: fadeIn 0.2s ease-out;
+  pointer-events: auto;
+}
+
+.modalOverlay .modal {
+  pointer-events: auto;
+}
+
+.modalOverlay .modal * {
+  pointer-events: auto;
+}
+
+/* Modal açıkken ana sayfadaki butonları buzlu/görünmez yap */
+body:has(.modalOverlay) .page .topBar .addTowButton,
+body:has(.modalOverlay) .page .topBar .userBadgeButton {
+  opacity: 0.3 !important;
+  pointer-events: none !important;
+  filter: blur(2px);
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* Login modal açıkken ana sayfadaki giriş/kayıt butonlarını buzlu yap */
+body:has(.loginModal) .page .topBar .actions .secondary,
+body:has(.loginModal) .page .topBar .actions .primary {
+  opacity: 0.3 !important;
+  pointer-events: none !important;
+  filter: blur(2px);
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* Register modal açıkken ana sayfadaki giriş/kayıt butonlarını buzlu yap */
+body:has(.modalOverlay) .page .topBar .actions .secondary,
+body:has(.modalOverlay) .page .topBar .actions .primary {
+  opacity: 0.3 !important;
+  pointer-events: none !important;
+  filter: blur(2px);
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* Modal içindeki tüm butonların çalışmasını sağla - en yüksek öncelik ve spesifiklik */
+.modalOverlay .modal button,
+.modalOverlay .modal .addTowButton,
+.modalOverlay .modal .modalCloseButton,
+.modalOverlay .modal .actions,
+.modalOverlay .modal .actions button,
+.modalOverlay .modal .actions .addTowButton,
+.modalOverlay .modal .modalHeader button,
+.modalOverlay .modal .modalHeader .addTowButton,
+.modalOverlay .modal .modalHeader .modalCloseButton,
+.modalOverlay .modal .modalHeader .actions,
+.modalOverlay .modal .modalHeader .actions button,
+.modalOverlay .modal .modalHeader .actions .addTowButton {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  filter: none !important;
+  cursor: pointer !important;
+  z-index: 1000 !important;
+}
+
+/* Daha spesifik override - modal içindeki butonlar için - en yüksek öncelik */
+body:has(.modalOverlay) .modalOverlay .modal .addTowButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalCloseButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .addTowButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .modalCloseButton,
+body:has(.modalOverlay) .modalOverlay .modal .actions .addTowButton,
+body:has(.modalOverlay) .modalOverlay .modal .actions button,
+body:has(.modalOverlay) .modalOverlay .modal button[type="button"],
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader button[type="button"],
+body:has(.modalOverlay) .modalOverlay .modal .actions button[type="button"],
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .actions .addTowButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .actions button,
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .actions button[type="button"] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  filter: none !important;
+  cursor: pointer !important;
+  z-index: 1001 !important;
+}
+
+/* Modal header içindeki actions container'ı için */
+.modalOverlay .modal .modalHeader .actions {
+  pointer-events: auto !important;
+  z-index: 1002 !important;
+}
+
+.modalOverlay .modal .modalHeader .actions * {
+  pointer-events: auto !important;
+}
+
+/* Modal içindeki tüm interaktif elementler için */
+.modalOverlay .modal * {
+  pointer-events: auto;
+}
+
+/* Modal içindeki butonlar için en güçlü override - tüm durumlar için - EN SON EKLENEN */
+.modalOverlay .modal button,
+.modalOverlay .modal .addTowButton,
+.modalOverlay .modal .modalCloseButton,
+.modalOverlay .modal .modalHeader .addTowButton,
+.modalOverlay .modal .modalHeader .modalCloseButton,
+.modalOverlay .modal .modalHeader .actions .addTowButton,
+.modalOverlay .modal .modalHeader .actions button,
+.modalOverlay .modal .actions .addTowButton,
+.modalOverlay .modal .actions button {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  filter: none !important;
+  cursor: pointer !important;
+  z-index: 1005 !important;
+}
+
+/* body:has() ile daha spesifik override */
+body:has(.modalOverlay) .modalOverlay .modal button,
+body:has(.modalOverlay) .modalOverlay .modal .addTowButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalCloseButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .addTowButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .modalCloseButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .actions .addTowButton,
+body:has(.modalOverlay) .modalOverlay .modal .modalHeader .actions button {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  filter: none !important;
+  cursor: pointer !important;
+  z-index: 1006 !important;
 }
 
 @keyframes fadeIn {
@@ -2326,41 +2493,819 @@
   box-shadow: 0 6px 20px rgba(105, 215, 255, 0.4);
 }
 
+/* Login Modal - Modern Tasarım */
+.loginModal {
+  width: min(480px, 90%);
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(155deg, rgba(14, 22, 45, 0.98), rgba(12, 16, 33, 0.98));
+  border: 1px solid rgba(105, 215, 255, 0.2);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(105, 215, 255, 0.1);
+  backdrop-filter: blur(20px);
+  animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+
+.loginHeader {
+  position: relative;
+  padding: 40px 32px 32px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.08), rgba(123, 109, 255, 0.05));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px 24px 0 0;
+}
+
+.loginLogoWrapper {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  animation: logoFloat 3s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.loginLogo {
+  height: 64px;
+  width: auto;
+  filter: drop-shadow(0 4px 12px rgba(105, 215, 255, 0.3));
+}
+
+.loginTitle {
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #69d7ff, #7b6dff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.02em;
+}
+
+.loginSubtitle {
+  font-size: 15px;
+  color: var(--muted);
+  margin: 0;
+  font-weight: 500;
+}
+
+.loginCloseButton {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loginCloseButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e7f7ff;
+  border-color: rgba(105, 215, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+.loginForm {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.loginField {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.loginFieldLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e7f7ff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loginFieldIcon {
+  font-size: 16px;
+  filter: drop-shadow(0 2px 4px rgba(105, 215, 255, 0.3));
+}
+
+.loginInput {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(105, 215, 255, 0.2);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.08), rgba(123, 109, 255, 0.05));
+  color: #e7f7ff;
+  font-size: 15px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.loginInput::placeholder {
+  color: rgba(231, 247, 255, 0.4);
+}
+
+.loginInput:hover {
+  border-color: rgba(105, 215, 255, 0.4);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.12), rgba(123, 109, 255, 0.08));
+}
+
+.loginInput:focus {
+  border-color: rgba(105, 215, 255, 0.6);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.15), rgba(123, 109, 255, 0.1));
+  box-shadow: 0 0 0 4px rgba(105, 215, 255, 0.15), 0 4px 12px rgba(105, 215, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.loginPasswordWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.loginPasswordWrap .loginInput {
+  padding-right: 50px;
+}
+
+.loginEyeButton {
+  position: absolute;
+  right: 14px;
+  background: none;
+  border: none;
+  color: rgba(231, 247, 255, 0.6);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loginEyeButton:hover {
+  color: #69d7ff;
+  background: rgba(105, 215, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.loginSubmitButton {
+  width: 100%;
+  padding: 16px 24px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #69d7ff, #4fb3d9);
+  color: #0a0f1e;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 15px rgba(105, 215, 255, 0.3);
+  margin-top: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.loginSubmitButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.loginSubmitButton:hover::before {
+  left: 100%;
+}
+
+.loginSubmitButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(105, 215, 255, 0.4);
+  background: linear-gradient(135deg, #7be5ff, #5fc3e9);
+}
+
+.loginSubmitButton:active {
+  transform: translateY(0);
+}
+
+.loginSubmitButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.loginButtonArrow {
+  font-size: 20px;
+  transition: transform 0.3s ease;
+}
+
+.loginSubmitButton:hover .loginButtonArrow {
+  transform: translateX(4px);
+}
+
+.loginButtonLoader {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(10, 15, 30, 0.3);
+  border-top-color: #0a0f1e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loginFooter {
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 8px;
+}
+
+.loginFooterText {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.loginFooterLink {
+  background: none;
+  border: none;
+  color: #69d7ff;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(105, 215, 255, 0.5);
+  transition: all 0.2s ease;
+  padding: 0;
+  font-size: 14px;
+}
+
+.loginFooterLink:hover {
+  color: #8bd5ff;
+  text-decoration-color: #8bd5ff;
+}
+
 @media (max-width: 640px) {
-  .topBar {
-    padding: 12px 16px;
+  .loginModal {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .loginHeader {
+    padding: 32px 24px 24px;
+  }
+
+  .loginLogo {
+    height: 56px;
+  }
+
+  .loginTitle {
+    font-size: 24px;
+  }
+
+  .loginSubtitle {
+    font-size: 14px;
+  }
+
+  .loginForm {
+    padding: 24px;
+    gap: 20px;
+  }
+
+  .loginInput {
+    padding: 14px 16px;
+    font-size: 14px;
+  }
+
+  .loginSubmitButton {
+    padding: 14px 20px;
+    font-size: 15px;
+  }
+}
+
+/* Register Modal - Modern Tasarım */
+.registerModal {
+  width: min(600px, 90%);
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(155deg, rgba(14, 22, 45, 0.98), rgba(12, 16, 33, 0.98));
+  border: 1px solid rgba(105, 215, 255, 0.2);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(105, 215, 255, 0.1);
+  backdrop-filter: blur(20px);
+  animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+
+.registerHeader {
+  position: relative;
+  padding: 40px 32px 32px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.08), rgba(123, 109, 255, 0.05));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px 24px 0 0;
+}
+
+.registerLogoWrapper {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  animation: logoFloat 3s ease-in-out infinite;
+}
+
+.registerLogo {
+  height: 64px;
+  width: auto;
+  filter: drop-shadow(0 4px 12px rgba(105, 215, 255, 0.3));
+}
+
+.registerTitle {
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #69d7ff, #7b6dff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.02em;
+}
+
+.registerSubtitle {
+  font-size: 15px;
+  color: var(--muted);
+  margin: 0;
+  font-weight: 500;
+}
+
+.registerCloseButton {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.registerCloseButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e7f7ff;
+  border-color: rgba(105, 215, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+.registerForm {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  max-height: calc(90vh - 200px);
+}
+
+.registerFormGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.registerField {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.registerFieldLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e7f7ff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.registerInput,
+.registerTextarea {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(105, 215, 255, 0.2);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.08), rgba(123, 109, 255, 0.05));
+  color: #e7f7ff;
+  font-size: 15px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  outline: none;
+  font-family: inherit;
+}
+
+.registerTextarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.registerInput::placeholder,
+.registerTextarea::placeholder {
+  color: rgba(231, 247, 255, 0.4);
+}
+
+.registerInput:hover,
+.registerTextarea:hover {
+  border-color: rgba(105, 215, 255, 0.4);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.12), rgba(123, 109, 255, 0.08));
+}
+
+.registerInput:focus,
+.registerTextarea:focus {
+  border-color: rgba(105, 215, 255, 0.6);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.15), rgba(123, 109, 255, 0.1));
+  box-shadow: 0 0 0 4px rgba(105, 215, 255, 0.15), 0 4px 12px rgba(105, 215, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.registerFileInput {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(105, 215, 255, 0.2);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.08), rgba(123, 109, 255, 0.05));
+  color: #e7f7ff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.registerFileInput:hover {
+  border-color: rgba(105, 215, 255, 0.4);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.12), rgba(123, 109, 255, 0.08));
+}
+
+.registerFileInput::file-selector-button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(105, 215, 255, 0.3);
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.15), rgba(123, 109, 255, 0.1));
+  color: #69d7ff;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  margin-right: 12px;
+  transition: all 0.2s ease;
+}
+
+.registerFileInput::file-selector-button:hover {
+  background: linear-gradient(135deg, rgba(105, 215, 255, 0.25), rgba(123, 109, 255, 0.15));
+  border-color: rgba(105, 215, 255, 0.5);
+}
+
+.registerAvatarRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.registerAvatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(105, 215, 255, 0.3);
+}
+
+.registerAvatarPlaceholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #69d7ff, #4fb3d9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 800;
+  color: #0a0f1e;
+  border: 2px solid rgba(105, 215, 255, 0.3);
+}
+
+.registerAvatarHint {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.registerSubmitButton {
+  width: 100%;
+  padding: 16px 24px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #69d7ff, #4fb3d9);
+  color: #0a0f1e;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 15px rgba(105, 215, 255, 0.3);
+  margin-top: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.registerSubmitButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.registerSubmitButton:hover::before {
+  left: 100%;
+}
+
+.registerSubmitButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(105, 215, 255, 0.4);
+  background: linear-gradient(135deg, #7be5ff, #5fc3e9);
+}
+
+.registerSubmitButton:active {
+  transform: translateY(0);
+}
+
+.registerSubmitButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.registerButtonArrow {
+  font-size: 20px;
+  transition: transform 0.3s ease;
+}
+
+.registerSubmitButton:hover .registerButtonArrow {
+  transform: translateX(4px);
+}
+
+.registerButtonLoader {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(10, 15, 30, 0.3);
+  border-top-color: #0a0f1e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.registerFooter {
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 8px;
+}
+
+.registerFooterText {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.registerFooterLink {
+  background: none;
+  border: none;
+  color: #69d7ff;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(105, 215, 255, 0.5);
+  transition: all 0.2s ease;
+  padding: 0;
+  font-size: 14px;
+}
+
+.registerFooterLink:hover {
+  color: #8bd5ff;
+  text-decoration-color: #8bd5ff;
+}
+
+@media (max-width: 640px) {
+  .registerModal {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .registerHeader {
+    padding: 32px 24px 24px;
+  }
+
+  .registerLogo {
+    height: 56px;
+  }
+
+  .registerTitle {
+    font-size: 24px;
+  }
+
+  .registerSubtitle {
+    font-size: 14px;
+  }
+
+  .registerForm {
+    padding: 24px;
+    gap: 20px;
+  }
+
+  .registerFormGrid {
+    grid-template-columns: 1fr;
     gap: 16px;
   }
 
+  .registerInput,
+  .registerTextarea {
+    padding: 14px 16px;
+    font-size: 14px;
+  }
+
+  .registerSubmitButton {
+    padding: 14px 20px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 640px) {
+  .topBar {
+    padding: 10px 12px;
+    gap: 10px;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    min-height: 60px;
+    overflow: visible;
+  }
+
+  .logoButton {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
   .logoImage {
-    height: 44px;
+    height: 42px;
+    width: auto;
+    max-width: 100%;
   }
 
   .topBarActions {
-    gap: 12px;
+    gap: 8px;
+    transform: none !important;
+    align-self: center;
+    justify-self: end;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 0;
+    overflow: visible;
+  }
+
+  .userArea {
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: visible;
+    position: relative;
+    z-index: 10000;
+  }
+
+  .actions {
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
   }
 
   .secondary,
   .primary {
     padding: 8px 12px;
-    font-size: 13px;
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .addTowButton {
-    padding: 10px 16px;
-    font-size: 13px;
-    gap: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    gap: 5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .addTowButton span:last-child {
+    display: none;
   }
 
   .addTowIcon {
     width: 18px;
     height: 18px;
     font-size: 16px;
+    flex-shrink: 0;
   }
 
   .userBadgeButton {
-    padding: 6px 10px;
-    gap: 8px;
+    padding: 6px 8px;
+    gap: 6px;
+    font-size: 12px;
+    min-width: 0;
+    flex-shrink: 1;
+    max-width: 100%;
+  }
+
+  .userBadgeButton > div {
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .userName {
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+  }
+
+  .userMeta {
+    font-size: 9px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+  }
+
+  .avatar,
+  .avatarPlaceholder {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .caret {
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-left: 2px;
   }
 
   .userBadgeButton:hover::after {
@@ -2383,6 +3328,300 @@
   .towTruckDetailModal {
     width: 95%;
     max-height: 95vh;
+  }
+
+  /* Page ve Panel mobil optimizasyonları */
+  .page {
+    padding: 20px 12px 60px;
+    gap: 16px;
+  }
+
+  .panel {
+    padding: 16px;
+    gap: 16px;
+    border-radius: 16px;
+  }
+
+  .panelHeader {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .panelTitle {
+    font-size: 18px;
+  }
+
+  .panelSubtitle {
+    font-size: 13px;
+  }
+
+  .controls {
+    gap: 12px;
+  }
+
+  .field {
+    gap: 6px;
+  }
+
+  .field span {
+    font-size: 12px;
+  }
+
+  .select,
+  .input,
+  .textarea {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .buttonRow {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .buttonRow button,
+  .buttonRow a {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Modal mobil optimizasyonları */
+  .modalOverlay {
+    padding: 12px;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: 95vh;
+    border-radius: 16px;
+  }
+
+  .modalHeader {
+    padding: 12px 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .modalHeader > div:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .modalHeader .panelTitle {
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+
+  .modalHeader .smallMuted {
+    font-size: 12px;
+  }
+
+  .modalHeader .actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+  }
+
+  .modalHeader .addTowButton {
+    padding: 8px 12px;
+    font-size: 12px;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .modalHeader .addTowButton span:last-child {
+    display: inline !important;
+  }
+
+  .modalHeader .modalCloseButton {
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .modalContent {
+    padding: 16px;
+    overflow-y: auto;
+    max-height: calc(95vh - 120px);
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Çekicilerim sayfası mobil optimizasyonları */
+  .modal .towListGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 0;
+  }
+
+  .modal .towListItem {
+    padding: 16px;
+    border-radius: 14px;
+    margin: 0;
+  }
+
+  .towListItemHeader {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .towListItemName {
+    font-size: 16px;
+  }
+
+  .towListItemStatus {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+
+  .towListItemInfo {
+    gap: 8px;
+  }
+
+  .towListItemInfoRow {
+    font-size: 13px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .towListItemActions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .towListActionButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Profilim sayfası mobil optimizasyonları */
+  .modal .profileHeader {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+  }
+
+  .modal .profileAvatarSection {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .modal .profileAvatar,
+  .modal .profileAvatarPlaceholder {
+    width: 70px;
+    height: 70px;
+    font-size: 28px;
+  }
+
+  .modal .profileAvatarInfo {
+    text-align: center;
+  }
+
+  .modal .profileName {
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+
+  .modal .profilePhotoUpload {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+
+  .modal .profilePhotoUploadButton {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .modal .profileFormSection {
+    margin-bottom: 24px;
+  }
+
+  .modal .sectionTitle {
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .modal .profileField {
+    margin-bottom: 0;
+  }
+
+  .modal .fieldLabel {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .modal .profileInput,
+  .modal .profileTextarea {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  .modal .profileActions {
+    margin-top: 24px;
+  }
+
+  .modal .profileSaveButton {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 24px;
+    font-size: 15px;
+  }
+
+  /* Ana sayfadaki çekici kartlarının modal içine yansımaması için */
+  .modal .towTruckCard,
+  .modal .towTruckAvatar,
+  .modal .towTruckAvatarPlaceholder {
+    display: none !important;
+  }
+
+  /* Ana sayfadaki topbar butonlarının modal içine yansımaması için */
+  .modal .topBar,
+  .modal .topBarActions,
+  .modal .userArea {
+    display: none !important;
+  }
+
+  /* Modal içindeki butonların düzgün görünmesi için */
+  .modal .modalHeader .actions {
+    display: flex !important;
+  }
+
+  /* Dropdown mobil optimizasyonları */
+  .dropdown {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: 0 !important;
+    min-width: 200px;
+    max-width: calc(100vw - 24px);
+    width: auto;
+    z-index: 999999 !important;
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(123, 109, 255, 0.2);
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transform-origin: top right;
+  }
+
+  /* Eğer sağdan taşarsa sola hizala */
+  @media (max-width: 400px) {
+    .dropdown {
+      right: auto !important;
+      left: 0 !important;
+      transform-origin: top left;
+    }
   }
 }
 
