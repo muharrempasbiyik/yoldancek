@@ -17,7 +17,7 @@
   backdrop-filter: blur(12px);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   position: relative;
-  z-index: 9998;
+  z-index: 100;
 }
 
 /* Logo Container */
@@ -58,7 +58,7 @@
   align-self: center;
   transform: translateY(-50px);
   position: relative;
-  z-index: 9999;
+  z-index: 101;
 }
 
 /* User Area (Giriş yapılmışsa) */
@@ -67,7 +67,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  z-index: 10000;
+  z-index: 102;
 }
 
 /* Actions (Giriş yapılmamışsa) */
@@ -75,6 +75,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
+  z-index: 103;
 }
 
 /* Butonlar - Ortak Stil */
@@ -92,6 +94,8 @@
   align-items: center;
   justify-content: center;
   white-space: nowrap;
+  position: relative;
+  z-index: 104;
 }
 
 .secondary:hover {
@@ -189,6 +193,8 @@
   justify-content: center;
   white-space: nowrap;
   box-shadow: 0 4px 20px rgba(110, 207, 255, 0.25);
+  position: relative;
+  z-index: 105;
 }
 
 .primary:hover {
@@ -1802,7 +1808,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  z-index: 50;
+  z-index: 10000;
   animation: fadeIn 0.2s ease-out;
   pointer-events: auto;
 }
