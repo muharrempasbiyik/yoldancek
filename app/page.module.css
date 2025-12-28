@@ -2931,7 +2931,8 @@ body:has(.modalOverlay) .modalOverlay .modal .modalHeader .actions button {
 }
 
 .registerInput,
-.registerTextarea {
+.registerTextarea,
+.registerSelect {
   width: 100%;
   padding: 16px 18px;
   border-radius: 14px;
@@ -2945,6 +2946,25 @@ body:has(.modalOverlay) .modalOverlay .modal .modalHeader .actions button {
   font-family: inherit;
 }
 
+.registerSelect {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2369d7ff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 18px center;
+  padding-right: 45px;
+}
+
+.registerSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.registerSelect option {
+  background: #0e162d;
+  color: #e7f7ff;
+}
+
 .registerTextarea {
   min-height: 100px;
   resize: vertical;
@@ -2956,13 +2976,15 @@ body:has(.modalOverlay) .modalOverlay .modal .modalHeader .actions button {
 }
 
 .registerInput:hover,
-.registerTextarea:hover {
+.registerTextarea:hover,
+.registerSelect:hover:not(:disabled) {
   border-color: rgba(105, 215, 255, 0.4);
   background: linear-gradient(135deg, rgba(105, 215, 255, 0.12), rgba(123, 109, 255, 0.08));
 }
 
 .registerInput:focus,
-.registerTextarea:focus {
+.registerTextarea:focus,
+.registerSelect:focus:not(:disabled) {
   border-color: rgba(105, 215, 255, 0.6);
   background: linear-gradient(135deg, rgba(105, 215, 255, 0.15), rgba(123, 109, 255, 0.1));
   box-shadow: 0 0 0 4px rgba(105, 215, 255, 0.15), 0 4px 12px rgba(105, 215, 255, 0.2);

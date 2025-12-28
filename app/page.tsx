@@ -45,18 +45,15 @@ export default function Home() {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [authToken, setAuthToken] = useState<string>("");
-  const [user, setUser] = useState<
-    | {
-        name: string;
-        company?: string;
-        photoUrl?: string;
-        email?: string;
-        phoneNumber?: string;
-        serviceCity?: string;
-        fullAddress?: string;
-      }
-    | null
-  >(null);
+  const [user, setUser] = useState<{
+    name: string;
+    company?: string;
+    photoUrl?: string;
+    email?: string;
+    phoneNumber?: string;
+    serviceCity?: string;
+    fullAddress?: string;
+  } | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
@@ -65,7 +62,6 @@ export default function Home() {
     companyName: "",
     phoneNumber: "",
     fullAddress: "",
-    serviceCity: "",
     email: "",
     password: "",
   });
@@ -108,40 +104,53 @@ export default function Home() {
     districtName: "",
   });
   const [editingTowPhoto, setEditingTowPhoto] = useState<File | null>(null);
-  const [editingTowPhotoPreview, setEditingTowPhotoPreview] = useState<string>("");
+  const [editingTowPhotoPreview, setEditingTowPhotoPreview] =
+    useState<string>("");
   const [editingDistricts, setEditingDistricts] = useState<District[]>([]);
   const districtNameCache = useRef<Record<number, string>>({});
-  const towLocCache = useRef<Record<number, { city?: string; district?: string }>>({});
+  const towLocCache = useRef<
+    Record<number, { city?: string; district?: string }>
+  >({});
   const [companies, setCompanies] = useState<CompanyDto[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
-  const [expandedCompanyId, setExpandedCompanyId] = useState<number | string | null>(null);
+  const [expandedCompanyId, setExpandedCompanyId] = useState<
+    number | string | null
+  >(null);
   const [mapQueryOverride, setMapQueryOverride] = useState<string>("");
-  const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [selectedTowTruck, setSelectedTowTruck] = useState<CompanyDto & { licensePlate?: string | null; driverPhotoUrl?: string | null } | null>(null);
+  const [geoLocation, setGeoLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [selectedTowTruck, setSelectedTowTruck] = useState<
+    | (CompanyDto & {
+        licensePlate?: string | null;
+        driverPhotoUrl?: string | null;
+      })
+    | null
+  >(null);
 
   const normalizeText = (val?: string) =>
-    (val || "")
-      .toLocaleLowerCase("tr-TR")
-      .replace(/\s+/g, " ")
-      .trim();
+    (val || "").toLocaleLowerCase("tr-TR").replace(/\s+/g, " ").trim();
 
   // Türkiye plaka formatı: 34 ABC 123 veya 34 ABC 1234
   const formatLicensePlate = (value: string): string => {
     // Sadece rakam ve harf al, boşlukları kaldır
-    const cleaned = value.replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü]/g, "").toUpperCase();
-    
+    const cleaned = value
+      .replace(/[^0-9A-Za-zÇĞİÖŞÜçğıöşü]/g, "")
+      .toUpperCase();
+
     if (cleaned.length === 0) return "";
-    
+
     // İlk 2 karakter rakam olmalı (il kodu)
     let formatted = cleaned.slice(0, 2);
-    
+
     if (cleaned.length > 2) {
       // Sonraki 3 karakter harf olmalı
       const letters = cleaned.slice(2, 5).replace(/[0-9]/g, "");
       if (letters.length > 0) {
         formatted += " " + letters;
       }
-      
+
       // Kalan karakterler rakam
       if (cleaned.length > 5) {
         const numbers = cleaned.slice(5, 9).replace(/[^0-9]/g, "");
@@ -150,7 +159,7 @@ export default function Home() {
         }
       }
     }
-    
+
     return formatted;
   };
 
@@ -205,40 +214,60 @@ export default function Home() {
           const towTrucks = await findNearestTowTrucks({
             latitude: geoLocation?.lat,
             longitude: geoLocation?.lng,
-            provinceId: !geoLocation && provinceId ? Number(provinceId) : undefined,
-            districtId: !geoLocation && districtId ? Number(districtId) : undefined,
+            provinceId:
+              !geoLocation && provinceId ? Number(provinceId) : undefined,
+            districtId:
+              !geoLocation && districtId ? Number(districtId) : undefined,
             limit: 20,
           });
-          
+
           if (towTrucks && towTrucks.length > 0) {
-            const companiesArray: (CompanyDto & { licensePlate?: string | null; latitude?: number; longitude?: number })[] = [];
-            
+            const companiesArray: (CompanyDto & {
+              licensePlate?: string | null;
+              latitude?: number;
+              longitude?: number;
+            })[] = [];
+
             const processTowTrucks = async () => {
               for (const tt of towTrucks) {
                 if (!tt.isActive) continue;
-                
+
                 const areas = (tt as any).operatingAreas || [];
-                
+
                 let matchesArea = true;
                 if (provinceId || districtId) {
                   matchesArea = areas.some((area: any) => {
-                    const matchesProvince = !provinceId || area.provinceId === Number(provinceId);
-                    const matchesDistrict = !districtId || area.districtId === Number(districtId);
+                    const matchesProvince =
+                      !provinceId || area.provinceId === Number(provinceId);
+                    const matchesDistrict =
+                      !districtId || area.districtId === Number(districtId);
                     return matchesProvince && matchesDistrict;
                   });
                 }
-                
+
                 if (!matchesArea) continue;
-                
+
                 const matchedArea = (areas.find((area: any) => {
-                  const matchesProvince = !provinceId || area.provinceId === Number(provinceId);
-                  const matchesDistrict = !districtId || area.districtId === Number(districtId);
+                  const matchesProvince =
+                    !provinceId || area.provinceId === Number(provinceId);
+                  const matchesDistrict =
+                    !districtId || area.districtId === Number(districtId);
                   return matchesProvince && matchesDistrict;
-                }) || areas[0] || {}) as any;
-                
-                const company: CompanyDto & { licensePlate?: string | null; latitude?: number; longitude?: number; driverPhotoUrl?: string | null } = {
+                }) ||
+                  areas[0] ||
+                  {}) as any;
+
+                const company: CompanyDto & {
+                  licensePlate?: string | null;
+                  latitude?: number;
+                  longitude?: number;
+                  driverPhotoUrl?: string | null;
+                } = {
                   id: tt.id || Date.now() + Math.random(),
-                  companyName: (tt as any).driverName || (tt as any).licensePlate || "Çekici",
+                  companyName:
+                    (tt as any).driverName ||
+                    (tt as any).licensePlate ||
+                    "Çekici",
                   phoneNumber: (tt as any).companyPhone || "",
                   email: (tt as any).companyEmail || "",
                   city: matchedArea.city || undefined,
@@ -246,22 +275,35 @@ export default function Home() {
                   serviceCity: (tt as any).companyServiceCity || undefined,
                   fullAddress: (tt as any).companyAddress || undefined,
                   distance: (tt as any).distance || undefined,
-                  latitude: (tt as any).latitude || (tt as any).currentLatitude || matchedArea.latitude || undefined,
-                  longitude: (tt as any).longitude || (tt as any).currentLongitude || matchedArea.longitude || undefined,
+                  latitude:
+                    (tt as any).latitude ||
+                    (tt as any).currentLatitude ||
+                    matchedArea.latitude ||
+                    undefined,
+                  longitude:
+                    (tt as any).longitude ||
+                    (tt as any).currentLongitude ||
+                    matchedArea.longitude ||
+                    undefined,
                   licensePlate: (tt as any).licensePlate || null,
-                  driverPhotoUrl: (tt as any).driverPhotoUrl 
-                    ? ((tt as any).driverPhotoUrl.startsWith('http') 
-                        ? (tt as any).driverPhotoUrl 
-                        : `${process.env.NEXT_PUBLIC_API_BASE || "http://server.muhammedeminkecik.com.tr:5000"}${(tt as any).driverPhotoUrl.startsWith('/') ? '' : '/'}${(tt as any).driverPhotoUrl}`)
+                  driverPhotoUrl: (tt as any).driverPhotoUrl
+                    ? (tt as any).driverPhotoUrl.startsWith("http")
+                      ? (tt as any).driverPhotoUrl
+                      : `${
+                          process.env.NEXT_PUBLIC_API_BASE ||
+                          "https://api.yoldancek.com"
+                        }${
+                          (tt as any).driverPhotoUrl.startsWith("/") ? "" : "/"
+                        }${(tt as any).driverPhotoUrl}`
                     : null,
                 };
-                
+
                 companiesArray.push(company);
               }
-              
+
               setCompanies(companiesArray);
             };
-            
+
             await processTowTrucks();
           } else {
             setCompanies([]);
@@ -271,8 +313,10 @@ export default function Home() {
           const res = await findNearestCompanies({
             latitude: geoLocation?.lat,
             longitude: geoLocation?.lng,
-            provinceId: !geoLocation && provinceId ? Number(provinceId) : undefined,
-            districtId: !geoLocation && districtId ? Number(districtId) : undefined,
+            provinceId:
+              !geoLocation && provinceId ? Number(provinceId) : undefined,
+            districtId:
+              !geoLocation && districtId ? Number(districtId) : undefined,
             limit: 20,
           });
           setCompanies(res || []);
@@ -311,30 +355,45 @@ export default function Home() {
 
   const getCompanyLocation = (company?: CompanyDto) => {
     if (!company) return "";
-    return [company.district, company.city || selectedProvinceName].filter(Boolean).join(", ");
+    return [company.district, company.city || selectedProvinceName]
+      .filter(Boolean)
+      .join(", ");
   };
 
   const mapMarkers = useMemo(() => {
     if (companies.length === 0) return "";
-    const faviconUrl = typeof window !== 'undefined' ? `${window.location.origin}/favicon.ico` : "/favicon.ico";
+    const faviconUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/favicon.ico`
+        : "/favicon.ico";
     const markers = companies
       .filter((c) => (c as any).latitude && (c as any).longitude)
-      .map((c) => `icon:${encodeURIComponent(faviconUrl)}|${(c as any).latitude},${(c as any).longitude}`)
+      .map(
+        (c) =>
+          `icon:${encodeURIComponent(faviconUrl)}|${(c as any).latitude},${
+            (c as any).longitude
+          }`
+      )
       .join("&markers=");
     return markers;
   }, [companies]);
 
-  const query = mapQueryOverride || getCompanyLocation(companies[0]) || [selectedDistrictName, selectedProvinceName || "Ankara", "Turkiye"].filter(Boolean).join(" ");
+  const query =
+    mapQueryOverride ||
+    getCompanyLocation(companies[0]) ||
+    [selectedDistrictName, selectedProvinceName || "Ankara", "Turkiye"]
+      .filter(Boolean)
+      .join(" ");
 
   const zoom = mapQueryOverride ? 14 : districtId ? 13 : 11;
-  
+
   // Google Maps embed API marker icon özelleştirmesini desteklemiyor
   // Bu yüzden embed API kullanmaya devam ediyoruz, marker icon'ları varsayılan olacak
   // Favicon'u marker olarak kullanmak için Google Maps JavaScript API gerekir
   let mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(
     query || "Turkiye"
   )}&output=embed&z=${zoom}&hl=tr&scrollwheel=1`;
-  
+
   if (mapMarkers) {
     // Embed API'de marker icon özelleştirmesi desteklenmiyor
     // Sadece koordinatları ekliyoruz
@@ -360,15 +419,15 @@ export default function Home() {
       const target = event.target as HTMLElement;
       const dropdown = target.closest(`.${styles.dropdown}`);
       const userBadgeButton = target.closest(`.${styles.userBadgeButton}`);
-      
+
       if (!dropdown && !userBadgeButton) {
         setShowProfileMenu(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showProfileMenu]);
 
@@ -392,24 +451,35 @@ export default function Home() {
 
   const handleAvatar = (res?: AuthResponseDto) => {
     const name = res?.company?.companyName || res?.company?.city || "";
-    const first = res?.company?.firstName || registerForm.firstName || profileForm.firstName;
-    const last = res?.company?.lastName || registerForm.lastName || profileForm.lastName;
+    const first =
+      res?.company?.firstName ||
+      registerForm.firstName ||
+      profileForm.firstName;
+    const last =
+      res?.company?.lastName || registerForm.lastName || profileForm.lastName;
     const companyName =
-      res?.company?.companyName || registerForm.companyName || profileForm.companyName;
-    const phone = res?.company?.phoneNumber || registerForm.phoneNumber || profileForm.phoneNumber;
+      res?.company?.companyName ||
+      registerForm.companyName ||
+      profileForm.companyName;
+    const phone =
+      res?.company?.phoneNumber ||
+      registerForm.phoneNumber ||
+      profileForm.phoneNumber;
     const serviceCity =
-      res?.company?.serviceCity || registerForm.serviceCity || profileForm.serviceCity;
+      res?.company?.serviceCity ||
+      selectedProvinceName ||
+      profileForm.serviceCity;
     const fullAddress =
-      res?.company?.fullAddress || registerForm.fullAddress || profileForm.fullAddress;
+      res?.company?.fullAddress ||
+      registerForm.fullAddress ||
+      profileForm.fullAddress;
     const email =
-      res?.company?.email || registerForm.email || loginForm.email || profileForm.email;
+      res?.company?.email ||
+      registerForm.email ||
+      loginForm.email ||
+      profileForm.email;
     const display =
-      companyName ||
-      name ||
-      [first, last]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
+      companyName || name || [first, last].filter(Boolean).join(" ").trim();
     const nextUser = {
       name: display || "Kullanıcı",
       company: companyName,
@@ -455,7 +525,7 @@ export default function Home() {
       const q = `${lat},${lng}`;
       setMapQueryOverride(q);
       setGeoLocation({ lat, lng });
-      
+
       // Reverse geocoding ile il ve ilçe bilgilerini al
       try {
         const { provinceName, districtName } = await reverseGeocode(lat, lng);
@@ -512,7 +582,9 @@ export default function Home() {
   const findDistrictId = (province: District[], name?: string) => {
     const target = normalizeText(name);
     if (!target) return undefined;
-    const found = province.find((d) => normalizeText(d.districtName) === target);
+    const found = province.find(
+      (d) => normalizeText(d.districtName) === target
+    );
     return found?.districtId;
   };
 
@@ -541,12 +613,20 @@ export default function Home() {
         const { provinceName, districtName } = await reverseGeocode(lat, lng);
         const provId = findProvinceId(provinceName);
         if (provId) {
-          setEditingTowForm((f) => ({ ...f, provinceId: String(provId), districtId: "" }));
+          setEditingTowForm((f) => ({
+            ...f,
+            provinceId: String(provId),
+            districtId: "",
+          }));
           const fetched = await getDistricts(provId);
           setEditingDistricts(fetched);
           const distId = findDistrictId(fetched, districtName);
           if (distId) {
-            setEditingTowForm((f) => ({ ...f, provinceId: String(provId), districtId: String(distId) }));
+            setEditingTowForm((f) => ({
+              ...f,
+              provinceId: String(provId),
+              districtId: String(distId),
+            }));
           }
         }
         setMapQueryOverride(`${lat},${lng}`);
@@ -558,7 +638,7 @@ export default function Home() {
   };
 
   const towListDataRef = useRef<any[]>([]);
-  
+
   const loadTowList = async (tokenValue?: string) => {
     const activeToken = tokenValue || authToken;
     if (!activeToken) return;
@@ -599,16 +679,20 @@ export default function Home() {
           const districtIdVal = area?.districtId ?? undefined;
           const districtFromState =
             districtIdVal !== undefined
-              ? districts.find((d) => d.districtId === districtIdVal)?.districtName || ""
+              ? districts.find((d) => d.districtId === districtIdVal)
+                  ?.districtName || ""
               : "";
           const provinceName =
             uniqueProvinces.find((p) => p.id === area?.provinceId)?.name ||
             savedLoc?.city ||
             area?.city ||
-            (area?.provinceId && area.provinceId !== 0 ? `İl #${area.provinceId}` : "") ||
+            (area?.provinceId && area.provinceId !== 0
+              ? `İl #${area.provinceId}`
+              : "") ||
             selectedProvinceName;
           const cachedDistrict =
-            (area?.districtId ?? null) !== null && (area?.districtId ?? undefined) !== undefined
+            (area?.districtId ?? null) !== null &&
+            (area?.districtId ?? undefined) !== undefined
               ? districtNameCache.current[area.districtId] || ""
               : "";
           const districtName =
@@ -616,9 +700,13 @@ export default function Home() {
             cachedDistrict ||
             districtFromState ||
             savedLoc?.district ||
-            (area?.districtId && area.districtId !== 0 ? `İlce #${area.districtId}` : "") ||
+            (area?.districtId && area.districtId !== 0
+              ? `İlce #${area.districtId}`
+              : "") ||
             selectedDistrictName;
-          const locationFromArea = [districtName, provinceName].filter(Boolean).join(", ");
+          const locationFromArea = [districtName, provinceName]
+            .filter(Boolean)
+            .join(", ");
           const locationFallback = [selectedDistrictName, selectedProvinceName]
             .filter(Boolean)
             .join(", ");
@@ -635,20 +723,31 @@ export default function Home() {
             plate: tow.licensePlate || "",
             location: location || undefined,
             isActive: tow.isActive,
-            areaProvinceId: area?.provinceId ?? (provinceId ? Number(provinceId) : undefined),
+            areaProvinceId:
+              area?.provinceId ?? (provinceId ? Number(provinceId) : undefined),
             areaDistrictId: area?.districtId ?? districtIdVal,
             areaCity: area?.city || undefined,
-            areaDistrict: area?.district || cachedDistrict || districtFromState || undefined,
-            photoUrl: (tow as any).driverPhotoUrl 
-              ? ((tow as any).driverPhotoUrl.startsWith('http') 
-                  ? (tow as any).driverPhotoUrl 
-                  : `${process.env.NEXT_PUBLIC_API_BASE || "http://server.muhammedeminkecik.com.tr:5000"}${(tow as any).driverPhotoUrl.startsWith('/') ? '' : '/'}${(tow as any).driverPhotoUrl}`)
+            areaDistrict:
+              area?.district ||
+              cachedDistrict ||
+              districtFromState ||
+              undefined,
+            photoUrl: (tow as any).driverPhotoUrl
+              ? (tow as any).driverPhotoUrl.startsWith("http")
+                ? (tow as any).driverPhotoUrl
+                : `${
+                    process.env.NEXT_PUBLIC_API_BASE ||
+                    "https://api.yoldancek.com"
+                  }${(tow as any).driverPhotoUrl.startsWith("/") ? "" : "/"}${
+                    (tow as any).driverPhotoUrl
+                  }`
               : null,
           };
         })
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Çekici listesi alinamadi";
+      const message =
+        err instanceof Error ? err.message : "Çekici listesi alinamadi";
       setToast(message);
     } finally {
       setTowLoading(false);
@@ -657,22 +756,62 @@ export default function Home() {
 
   const handleRegister = async () => {
     setToast("");
+    
+    // Tüm zorunlu alanları kontrol et
+    if (!registerForm.firstName?.trim()) {
+      setToast("Lütfen adınızı giriniz.");
+      return;
+    }
+    if (!registerForm.lastName?.trim()) {
+      setToast("Lütfen soyadınızı giriniz.");
+      return;
+    }
+    if (!registerForm.companyName?.trim()) {
+      setToast("Lütfen firma adınızı giriniz.");
+      return;
+    }
+    if (!registerForm.phoneNumber?.trim()) {
+      setToast("Lütfen telefon numaranızı giriniz.");
+      return;
+    }
     if (!provinceId || !districtId) {
       setToast("Lütfen il ve ilçe seçiniz.");
       return;
     }
+    if (!selectedProvinceName || !selectedDistrictName) {
+      setToast("Lütfen geçerli bir il ve ilçe seçiniz.");
+      return;
+    }
+    if (!registerForm.fullAddress?.trim()) {
+      setToast("Lütfen açık adresinizi giriniz.");
+      return;
+    }
+    if (!registerForm.email?.trim()) {
+      setToast("Lütfen e-posta adresinizi giriniz.");
+      return;
+    }
+    if (!registerForm.password?.trim()) {
+      setToast("Lütfen şifrenizi giriniz.");
+      return;
+    }
+    if (registerForm.password.length < 6) {
+      setToast("Şifre en az 6 karakter olmalıdır.");
+      return;
+    }
+    
     setRegistering(true);
     try {
       const payload = {
-        firstName: registerForm.firstName,
-        lastName: registerForm.lastName,
-        companyName: registerForm.companyName,
-        phoneNumber: registerForm.phoneNumber,
+        firstName: registerForm.firstName.trim(),
+        lastName: registerForm.lastName.trim(),
+        companyName: registerForm.companyName.trim(),
+        phoneNumber: registerForm.phoneNumber.trim(),
         provinceId: Number(provinceId),
         districtId: Number(districtId),
-        fullAddress: registerForm.fullAddress,
-        serviceCity: registerForm.serviceCity || selectedProvinceName,
-        email: registerForm.email,
+        fullAddress: registerForm.fullAddress.trim(),
+        serviceCity: selectedProvinceName, // Seçilen il otomatik olarak hizmet ili olarak kaydediliyor
+        serviceDistrict: selectedDistrictName || undefined,
+        email: registerForm.email.trim(),
         password: registerForm.password,
         city: selectedProvinceName,
         district: selectedDistrictName,
@@ -752,7 +891,10 @@ export default function Home() {
   const handleProfileSave = () => {
     const displayName =
       profileForm.companyName ||
-      [profileForm.firstName, profileForm.lastName].filter(Boolean).join(" ").trim() ||
+      [profileForm.firstName, profileForm.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
       "Kullanıcı";
     // Yeni fotoğraf yüklendiyse preview'ı kullan, yoksa mevcut fotoğrafı koru
     const photoUrl = profilePhotoPreview || user?.photoUrl || undefined;
@@ -825,7 +967,9 @@ export default function Home() {
           id: newTow.id || Date.now(),
           name: newTow.driverName || towForm.name,
           plate: newTow.licensePlate || towForm.plate,
-          location: [selectedDistrictName, selectedProvinceName].filter(Boolean).join(", "),
+          location: [selectedDistrictName, selectedProvinceName]
+            .filter(Boolean)
+            .join(", "),
           areaProvinceId: Number(provinceId),
           areaDistrictId: Number(districtId),
           areaCity: selectedProvinceName,
@@ -840,10 +984,10 @@ export default function Home() {
         };
         localStorage.setItem(TOW_LOC_KEY, JSON.stringify(towLocCache.current));
       }
-      
+
       // Listeyi yeniden yükle (fotoğraf güncellemesi için)
       await loadTowList(authToken);
-      
+
       setTowForm({ name: "", plate: "", notes: "" });
       setTowPhoto(null);
       setTowPhotoPreview("");
@@ -851,17 +995,27 @@ export default function Home() {
       setShowTowList(true);
       setToast("Çekici eklendi");
     } catch (err) {
-      if (err instanceof Error && err.message.toLowerCase().includes("failed to fetch")) {
-        setToast("Çekici eklenemedi: API'ye ulasilamadi (CORS ya da 500 hatasi).");
+      if (
+        err instanceof Error &&
+        err.message.toLowerCase().includes("failed to fetch")
+      ) {
+        setToast(
+          "Çekici eklenemedi: API'ye ulasilamadi (CORS ya da 500 hatasi)."
+        );
       } else {
-        const message = err instanceof Error ? err.message : "Çekici eklenemedi";
+        const message =
+          err instanceof Error ? err.message : "Çekici eklenemedi";
         setToast(message);
       }
     } finally {
       setTowLoading(false);
     }
   };
-  const handleTowUpdate = (id: number, field: "name" | "plate" | "notes", value: string) => {
+  const handleTowUpdate = (
+    id: number,
+    field: "name" | "plate" | "notes",
+    value: string
+  ) => {
     setTowList((list) =>
       list.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
@@ -878,18 +1032,23 @@ export default function Home() {
       if (current.isActive) {
         await deactivateTowTruck(authToken, id);
         setTowList((list) =>
-          list.map((item) => (item.id === id ? { ...item, isActive: false } : item))
+          list.map((item) =>
+            item.id === id ? { ...item, isActive: false } : item
+          )
         );
         setToast("Çekici pasifleştirildi");
       } else {
         await activateTowTruck(authToken, id);
         setTowList((list) =>
-          list.map((item) => (item.id === id ? { ...item, isActive: true } : item))
+          list.map((item) =>
+            item.id === id ? { ...item, isActive: true } : item
+          )
         );
         setToast("Çekici aktifleştirildi");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Durum Güncellenemedi";
+      const message =
+        err instanceof Error ? err.message : "Durum Güncellenemedi";
       setToast(message);
     }
   };
@@ -900,7 +1059,8 @@ export default function Home() {
     setEditingTowId(id);
     const districtNameFromState =
       current.areaDistrictId !== undefined && current.areaDistrictId !== null
-        ? districts.find((d) => d.districtId === current.areaDistrictId)?.districtName || ""
+        ? districts.find((d) => d.districtId === current.areaDistrictId)
+            ?.districtName || ""
         : "";
     setEditingTowForm({
       name: current.name || "",
@@ -910,16 +1070,18 @@ export default function Home() {
       cityName: current.areaCity || selectedProvinceName || "",
       districtName:
         current.areaDistrict ||
-        (current.areaDistrictId ? districtNameCache.current[current.areaDistrictId] : "") ||
+        (current.areaDistrictId
+          ? districtNameCache.current[current.areaDistrictId]
+          : "") ||
         districtNameFromState ||
         selectedDistrictName ||
         "",
     });
-    
+
     // Fotoğraf özelliği kaldırıldı
     setEditingTowPhoto(null);
     setEditingTowPhotoPreview("");
-    
+
     const provToLoad =
       current.areaProvinceId ||
       (editingTowForm.provinceId ? Number(editingTowForm.provinceId) : null) ||
@@ -935,7 +1097,14 @@ export default function Home() {
 
   const cancelTowEdit = () => {
     setEditingTowId(null);
-    setEditingTowForm({ name: "", plate: "", provinceId: "", districtId: "", cityName: "", districtName: "" });
+    setEditingTowForm({
+      name: "",
+      plate: "",
+      provinceId: "",
+      districtId: "",
+      cityName: "",
+      districtName: "",
+    });
     setEditingDistricts([]);
     setEditingTowPhoto(null);
     setEditingTowPhotoPreview("");
@@ -950,11 +1119,12 @@ export default function Home() {
     if (!current) return;
     try {
       const provinceName =
-        uniqueProvinces.find((p) => String(p.id) === editingTowForm.provinceId)?.name ||
-        current.areaCity;
+        uniqueProvinces.find((p) => String(p.id) === editingTowForm.provinceId)
+          ?.name || current.areaCity;
       const districtName =
-        editingDistricts.find((d) => String(d.districtId) === editingTowForm.districtId)
-          ?.districtName ||
+        editingDistricts.find(
+          (d) => String(d.districtId) === editingTowForm.districtId
+        )?.districtName ||
         (editingTowForm.districtId
           ? districtNameCache.current[Number(editingTowForm.districtId)]
           : "") ||
@@ -964,7 +1134,12 @@ export default function Home() {
         driverName?: string;
         licensePlate?: string;
         isActive?: boolean;
-        areas?: { provinceId: number; districtId: number; city?: string; district?: string }[];
+        areas?: {
+          provinceId: number;
+          districtId: number;
+          city?: string;
+          district?: string;
+        }[];
         driverPhoto?: File | null;
       } = {
         driverName: editingTowForm.name,
@@ -981,22 +1156,22 @@ export default function Home() {
                 },
               ]
             : current.areaProvinceId && current.areaDistrictId
-              ? [
-                  {
-                    provinceId: current.areaProvinceId,
-                    districtId: current.areaDistrictId,
-                    city: current.areaCity || provinceName,
-                    district: current.areaDistrict || districtName,
-                  },
-                ]
-              : undefined,
+            ? [
+                {
+                  provinceId: current.areaProvinceId,
+                  districtId: current.areaDistrictId,
+                  city: current.areaCity || provinceName,
+                  district: current.areaDistrict || districtName,
+                },
+              ]
+            : undefined,
       };
-      
+
       // Sadece yeni fotoğraf seçildiyse ekle
       if (editingTowPhoto) {
         updatePayload.driverPhoto = editingTowPhoto;
       }
-      
+
       const updated = await updateTowTruck(authToken, id, updatePayload);
       const area = (updated as any).operatingAreas?.[0];
       const location = [area?.district, area?.city].filter(Boolean).join(", ");
@@ -1009,15 +1184,23 @@ export default function Home() {
       }
       // Listeyi yeniden yükle (fotoğraf güncellemesi için)
       await loadTowList(authToken);
-      
+
       setEditingTowId(null);
-      setEditingTowForm({ name: "", plate: "", provinceId: "", districtId: "", cityName: "", districtName: "" });
+      setEditingTowForm({
+        name: "",
+        plate: "",
+        provinceId: "",
+        districtId: "",
+        cityName: "",
+        districtName: "",
+      });
       setEditingDistricts([]);
       setEditingTowPhoto(null);
       setEditingTowPhotoPreview("");
       setToast("Çekici Güncellendi");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Güncelleme başarısız";
+      const message =
+        err instanceof Error ? err.message : "Güncelleme başarısız";
       setToast(message);
     }
   };
@@ -1047,26 +1230,43 @@ export default function Home() {
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <button 
-          type="button" 
+        <button
+          type="button"
           className={styles.logoButton}
           onClick={() => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            window.scrollTo({ top: 0, behavior: "smooth" });
           }}
         >
-          <Image src={logo} alt="Yoldan Çek" className={styles.logoImage} priority />
+          <Image
+            src={logo}
+            alt="Yoldan Çek"
+            className={styles.logoImage}
+            priority
+          />
         </button>
-        
+
         <div className={styles.topBarActions}>
           {user ? (
             <div className={styles.userArea}>
-              <button type="button" className={styles.addTowButton} onClick={openTowModal}>
+              <button
+                type="button"
+                className={styles.addTowButton}
+                onClick={openTowModal}
+              >
                 <span className={styles.addTowIcon}>+</span>
                 <span>Çekici ekle</span>
               </button>
-              <button type="button" className={styles.userBadgeButton} onClick={toggleProfileMenu}>
+              <button
+                type="button"
+                className={styles.userBadgeButton}
+                onClick={toggleProfileMenu}
+              >
                 {user.photoUrl ? (
-                  <img src={user.photoUrl} alt={user.name} className={styles.avatar} />
+                  <img
+                    src={user.photoUrl}
+                    alt={user.name}
+                    className={styles.avatar}
+                  />
                 ) : (
                   <div className={styles.avatarPlaceholder}>{initials}</div>
                 )}
@@ -1080,16 +1280,28 @@ export default function Home() {
               </button>
               {showProfileMenu ? (
                 <div className={styles.dropdown}>
-                  <button className={styles.dropdownItem} type="button" onClick={openTowList}>
+                  <button
+                    className={styles.dropdownItem}
+                    type="button"
+                    onClick={openTowList}
+                  >
                     <span className={styles.dropdownText}>Çekicilerim</span>
                     <span className={styles.dropdownArrow}>→</span>
                   </button>
-                  <button className={styles.dropdownItem} type="button" onClick={openProfile}>
+                  <button
+                    className={styles.dropdownItem}
+                    type="button"
+                    onClick={openProfile}
+                  >
                     <span className={styles.dropdownText}>Profil</span>
                     <span className={styles.dropdownArrow}>→</span>
                   </button>
                   <div className={styles.dropdownDivider}></div>
-                  <button className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`} type="button" onClick={handleLogout}>
+                  <button
+                    className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`}
+                    type="button"
+                    onClick={handleLogout}
+                  >
                     <span className={styles.dropdownText}>Çıkış</span>
                     <span className={styles.dropdownArrow}>→</span>
                   </button>
@@ -1098,10 +1310,18 @@ export default function Home() {
             </div>
           ) : (
             <div className={styles.actions}>
-              <button className={styles.secondary} type="button" onClick={() => setShowLogin(true)}>
+              <button
+                className={styles.secondary}
+                type="button"
+                onClick={() => setShowLogin(true)}
+              >
                 Giriş yap
               </button>
-              <button className={styles.primary} type="button" onClick={() => setShowRegister(true)}>
+              <button
+                className={styles.primary}
+                type="button"
+                onClick={() => setShowRegister(true)}
+              >
                 Kayıt ol
               </button>
             </div>
@@ -1110,11 +1330,11 @@ export default function Home() {
       </div>
 
       {toast ? (
-        <div 
-          className={styles.toast} 
+        <div
+          className={styles.toast}
           onClick={() => setToast("")}
           role="alert"
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: "pointer" }}
         >
           {toast}
         </div>
@@ -1124,9 +1344,15 @@ export default function Home() {
         <div className={styles.panelHeader}>
           <div>
             <div className={styles.panelTitle}>Konum Seç</div>
-            <div className={styles.panelSubtitle}>Yakınındaki çekicileri bulmak için konumunu seç</div>
+            <div className={styles.panelSubtitle}>
+              Yakınındaki çekicileri bulmak için konumunu seç
+            </div>
           </div>
-          <button className={styles.secondary} type="button" onClick={handleUseMyLocation}>
+          <button
+            className={styles.secondary}
+            type="button"
+            onClick={handleUseMyLocation}
+          >
             Konumumu kullan
           </button>
         </div>
@@ -1175,7 +1401,7 @@ export default function Home() {
           </label>
         </div>
 
-                <div className={styles.mapWrap}>
+        <div className={styles.mapWrap}>
           <iframe
             key={mapUrl}
             className={styles.map}
@@ -1186,22 +1412,33 @@ export default function Home() {
             title="Harita"
           />
           <div className={styles.mapBadge}>
-            {mapQueryOverride || `${selectedDistrictName || "İlçe seç"} | ${selectedProvinceName || "İl seç"}`}
+            {mapQueryOverride ||
+              `${selectedDistrictName || "İlçe seç"} | ${
+                selectedProvinceName || "İl seç"
+              }`}
           </div>
           {companies.length > 0 ? (
             <div className={styles.mapPins}>
               <div className={styles.mapPinsTitle}>Online Çekiciler</div>
               <div className={styles.mapPinsList}>
                 {companies.slice(0, 12).map((c, idx) => {
-                  const towTruck = c as CompanyDto & { latitude?: number; longitude?: number; driverPhotoUrl?: string | null };
-                  const locText = [towTruck.district, towTruck.city || selectedProvinceName]
-                    .filter(Boolean)
-                    .join(", ") || "Konum yok";
-                  
-                  const targetQuery = towTruck.latitude && towTruck.longitude
-                    ? `${towTruck.latitude},${towTruck.longitude}`
-                    : locText === "Konum yok" ? selectedProvinceName : locText;
-                  
+                  const towTruck = c as CompanyDto & {
+                    latitude?: number;
+                    longitude?: number;
+                    driverPhotoUrl?: string | null;
+                  };
+                  const locText =
+                    [towTruck.district, towTruck.city || selectedProvinceName]
+                      .filter(Boolean)
+                      .join(", ") || "Konum yok";
+
+                  const targetQuery =
+                    towTruck.latitude && towTruck.longitude
+                      ? `${towTruck.latitude},${towTruck.longitude}`
+                      : locText === "Konum yok"
+                      ? selectedProvinceName
+                      : locText;
+
                   return (
                     <button
                       key={`${towTruck.id || idx}-pin`}
@@ -1209,22 +1446,26 @@ export default function Home() {
                       className={styles.mapPinButton}
                       onClick={() => {
                         if (towTruck.latitude && towTruck.longitude) {
-                          setMapQueryOverride(`${towTruck.latitude},${towTruck.longitude}`);
+                          setMapQueryOverride(
+                            `${towTruck.latitude},${towTruck.longitude}`
+                          );
                         } else {
                           setMapQueryOverride(targetQuery);
                         }
                       }}
                     >
                       {towTruck.driverPhotoUrl ? (
-                        <img 
-                          src={towTruck.driverPhotoUrl} 
+                        <img
+                          src={towTruck.driverPhotoUrl}
                           alt={towTruck.companyName || "Çekici"}
                           className={styles.mapPinAvatar}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const placeholder = target.nextElementSibling as HTMLElement;
-                            if (placeholder) placeholder.style.display = 'inline-block';
+                            target.style.display = "none";
+                            const placeholder =
+                              target.nextElementSibling as HTMLElement;
+                            if (placeholder)
+                              placeholder.style.display = "inline-block";
                           }}
                         />
                       ) : null}
@@ -1232,13 +1473,20 @@ export default function Home() {
                         <span className={styles.mapPinDot} />
                       )}
                       {towTruck.driverPhotoUrl && (
-                        <span className={styles.mapPinDot} style={{ display: 'none' }} />
+                        <span
+                          className={styles.mapPinDot}
+                          style={{ display: "none" }}
+                        />
                       )}
                       <div className={styles.mapPinText}>
-                        <div className={styles.mapPinName}>{towTruck.companyName || "Cekici"}</div>
+                        <div className={styles.mapPinName}>
+                          {towTruck.companyName || "Cekici"}
+                        </div>
                         <div className={styles.mapPinMeta}>
-                          {towTruck.latitude && towTruck.longitude 
-                            ? `${towTruck.latitude.toFixed(4)}, ${towTruck.longitude.toFixed(4)}`
+                          {towTruck.latitude && towTruck.longitude
+                            ? `${towTruck.latitude.toFixed(
+                                4
+                              )}, ${towTruck.longitude.toFixed(4)}`
                             : locText}
                         </div>
                       </div>
@@ -1248,7 +1496,8 @@ export default function Home() {
               </div>
             </div>
           ) : null}
-        </div></section>
+        </div>
+      </section>
 
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
@@ -1257,11 +1506,17 @@ export default function Home() {
         {companiesLoading ? (
           <div className={styles.smallMuted}>Cekiciler yukleniyor...</div>
         ) : companies.length === 0 ? (
-          <div className={styles.smallMuted}>Henüz listelenecek çekici yok.</div>
+          <div className={styles.smallMuted}>
+            Henüz listelenecek çekici yok.
+          </div>
         ) : (
           <div className={styles.towTrucksGrid}>
             {companies.map((c, idx) => {
-              const towTruck = c as CompanyDto & { licensePlate?: string | null; latitude?: number; longitude?: number };
+              const towTruck = c as CompanyDto & {
+                licensePlate?: string | null;
+                latitude?: number;
+                longitude?: number;
+              };
               const basePhone = (towTruck.phoneNumber || "").trim();
               const cleaned = basePhone.replace(/[^0-9+]/g, "");
               const withoutPrefixZeros = cleaned.startsWith("+")
@@ -1275,20 +1530,24 @@ export default function Home() {
               const phoneHref = phoneWithCountry
                 ? `tel:${phoneWithCountry.replace(/\s+/g, "")}`
                 : undefined;
-              
+
               return (
-                <div key={`${towTruck.id || idx}-${towTruck.companyName || "cmp"}`} className={styles.towTruckCard}>
+                <div
+                  key={`${towTruck.id || idx}-${towTruck.companyName || "cmp"}`}
+                  className={styles.towTruckCard}
+                >
                   <div className={styles.towTruckCardHeader}>
                     {(towTruck as any).driverPhotoUrl ? (
-                      <img 
-                        src={(towTruck as any).driverPhotoUrl} 
+                      <img
+                        src={(towTruck as any).driverPhotoUrl}
                         alt={towTruck.companyName || "Çekici"}
                         className={styles.towTruckAvatar}
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          const placeholder = target.nextElementSibling as HTMLElement;
-                          if (placeholder) placeholder.style.display = 'flex';
+                          target.style.display = "none";
+                          const placeholder =
+                            target.nextElementSibling as HTMLElement;
+                          if (placeholder) placeholder.style.display = "flex";
                         }}
                       />
                     ) : null}
@@ -1298,21 +1557,30 @@ export default function Home() {
                       </div>
                     )}
                     {(towTruck as any).driverPhotoUrl && (
-                      <div className={styles.towTruckAvatarPlaceholder} style={{ display: 'none' }}>
+                      <div
+                        className={styles.towTruckAvatarPlaceholder}
+                        style={{ display: "none" }}
+                      >
                         {(towTruck.companyName || "Ç")[0].toUpperCase()}
                       </div>
                     )}
                     <div className={styles.towTruckInfo}>
-                      <div className={styles.towTruckName}>{towTruck.companyName || "Çekici"}</div>
+                      <div className={styles.towTruckName}>
+                        {towTruck.companyName || "Çekici"}
+                      </div>
                       <div className={styles.towTruckLocation}>
-                        {[towTruck.district, towTruck.city].filter(Boolean).join(", ") || "Konum belirtilmedi"}
+                        {[towTruck.district, towTruck.city]
+                          .filter(Boolean)
+                          .join(", ") || "Konum belirtilmedi"}
                       </div>
                     </div>
                     {towTruck.distance && (
-                      <div className={styles.towTruckDistance}>{towTruck.distance.toFixed(1)} km</div>
+                      <div className={styles.towTruckDistance}>
+                        {towTruck.distance.toFixed(1)} km
+                      </div>
                     )}
                   </div>
-                  
+
                   <div className={styles.towTruckCardBody}>
                     <div className={styles.towTruckContact}>
                       <div className={styles.towTruckContactItem}>
@@ -1324,11 +1592,13 @@ export default function Home() {
                       {towTruck.licensePlate && (
                         <div className={styles.towTruckContactItem}>
                           <span className={styles.towTruckContactIcon}>🚗</span>
-                          <span className={styles.towTruckPlate}>{towTruck.licensePlate}</span>
+                          <span className={styles.towTruckPlate}>
+                            {towTruck.licensePlate}
+                          </span>
                         </div>
                       )}
                     </div>
-                    
+
                     {towTruck.fullAddress && (
                       <div className={styles.towTruckAddress}>
                         <span className={styles.towTruckAddressIcon}>📍</span>
@@ -1336,7 +1606,7 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className={styles.towTruckCardFooter}>
                     <button
                       className={styles.towTruckDetailButton}
@@ -1360,8 +1630,16 @@ export default function Home() {
 
       {/* Çekici Detay Popup */}
       {selectedTowTruck && (
-        <div className={styles.modalOverlay} role="dialog" aria-modal="true" onClick={() => setSelectedTowTruck(null)}>
-          <div className={styles.towTruckDetailModal} onClick={(e) => e.stopPropagation()}>
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedTowTruck(null)}
+        >
+          <div
+            className={styles.towTruckDetailModal}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className={styles.towTruckDetailHeader}>
               <button
                 className={styles.modalCloseButton}
@@ -1372,19 +1650,20 @@ export default function Home() {
                 ×
               </button>
             </div>
-            
+
             <div className={styles.towTruckDetailContent}>
               <div className={styles.towTruckDetailProfile}>
                 {(selectedTowTruck as any).driverPhotoUrl ? (
-                  <img 
-                    src={(selectedTowTruck as any).driverPhotoUrl} 
+                  <img
+                    src={(selectedTowTruck as any).driverPhotoUrl}
                     alt={selectedTowTruck.companyName || "Çekici"}
                     className={styles.towTruckDetailAvatar}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const placeholder = target.nextElementSibling as HTMLElement;
-                      if (placeholder) placeholder.style.display = 'flex';
+                      target.style.display = "none";
+                      const placeholder =
+                        target.nextElementSibling as HTMLElement;
+                      if (placeholder) placeholder.style.display = "flex";
                     }}
                   />
                 ) : null}
@@ -1394,13 +1673,20 @@ export default function Home() {
                   </div>
                 )}
                 {(selectedTowTruck as any).driverPhotoUrl && (
-                  <div className={styles.towTruckDetailAvatarPlaceholder} style={{ display: 'none' }}>
+                  <div
+                    className={styles.towTruckDetailAvatarPlaceholder}
+                    style={{ display: "none" }}
+                  >
                     {(selectedTowTruck.companyName || "Ç")[0].toUpperCase()}
                   </div>
                 )}
-                <div className={styles.towTruckDetailName}>{selectedTowTruck.companyName || "Çekici"}</div>
+                <div className={styles.towTruckDetailName}>
+                  {selectedTowTruck.companyName || "Çekici"}
+                </div>
                 <div className={styles.towTruckDetailLocation}>
-                  {[selectedTowTruck.district, selectedTowTruck.city].filter(Boolean).join(", ") || "Konum belirtilmedi"}
+                  {[selectedTowTruck.district, selectedTowTruck.city]
+                    .filter(Boolean)
+                    .join(", ") || "Konum belirtilmedi"}
                 </div>
                 {selectedTowTruck.distance && (
                   <div className={styles.towTruckDetailDistance}>
@@ -1408,13 +1694,15 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              
+
               <div className={styles.towTruckDetailInfo}>
                 <div className={styles.towTruckDetailInfoItem}>
                   <div className={styles.towTruckDetailInfoLabel}>Telefon</div>
                   <div className={styles.towTruckDetailInfoValue}>
                     {(() => {
-                      const basePhone = (selectedTowTruck.phoneNumber || "").trim();
+                      const basePhone = (
+                        selectedTowTruck.phoneNumber || ""
+                      ).trim();
                       const cleaned = basePhone.replace(/[^0-9+]/g, "");
                       const withoutPrefixZeros = cleaned.startsWith("+")
                         ? cleaned
@@ -1428,7 +1716,10 @@ export default function Home() {
                         ? `tel:${phoneWithCountry.replace(/\s+/g, "")}`
                         : undefined;
                       return phoneHref ? (
-                        <a href={phoneHref} className={styles.towTruckDetailPhoneLink}>
+                        <a
+                          href={phoneHref}
+                          className={styles.towTruckDetailPhoneLink}
+                        >
                           {phoneWithCountry}
                         </a>
                       ) : (
@@ -1437,36 +1728,48 @@ export default function Home() {
                     })()}
                   </div>
                 </div>
-                
+
                 {selectedTowTruck.licensePlate && (
                   <div className={styles.towTruckDetailInfoItem}>
                     <div className={styles.towTruckDetailInfoLabel}>Plaka</div>
-                    <div className={styles.towTruckDetailInfoValue}>{selectedTowTruck.licensePlate}</div>
+                    <div className={styles.towTruckDetailInfoValue}>
+                      {selectedTowTruck.licensePlate}
+                    </div>
                   </div>
                 )}
-                
+
                 {selectedTowTruck.email && (
                   <div className={styles.towTruckDetailInfoItem}>
-                    <div className={styles.towTruckDetailInfoLabel}>E-posta</div>
-                    <div className={styles.towTruckDetailInfoValue}>{selectedTowTruck.email}</div>
+                    <div className={styles.towTruckDetailInfoLabel}>
+                      E-posta
+                    </div>
+                    <div className={styles.towTruckDetailInfoValue}>
+                      {selectedTowTruck.email}
+                    </div>
                   </div>
                 )}
-                
+
                 {selectedTowTruck.fullAddress && (
                   <div className={styles.towTruckDetailInfoItem}>
                     <div className={styles.towTruckDetailInfoLabel}>Adres</div>
-                    <div className={styles.towTruckDetailInfoValue}>{selectedTowTruck.fullAddress}</div>
+                    <div className={styles.towTruckDetailInfoValue}>
+                      {selectedTowTruck.fullAddress}
+                    </div>
                   </div>
                 )}
-                
+
                 {selectedTowTruck.serviceCity && (
                   <div className={styles.towTruckDetailInfoItem}>
-                    <div className={styles.towTruckDetailInfoLabel}>Hizmet Bölgesi</div>
-                    <div className={styles.towTruckDetailInfoValue}>{selectedTowTruck.serviceCity}</div>
+                    <div className={styles.towTruckDetailInfoLabel}>
+                      Hizmet Bölgesi
+                    </div>
+                    <div className={styles.towTruckDetailInfoValue}>
+                      {selectedTowTruck.serviceCity}
+                    </div>
                   </div>
                 )}
               </div>
-              
+
               <div className={styles.towTruckDetailActions}>
                 {(() => {
                   const basePhone = (selectedTowTruck.phoneNumber || "").trim();
@@ -1483,7 +1786,10 @@ export default function Home() {
                     ? `tel:${phoneWithCountry.replace(/\s+/g, "")}`
                     : undefined;
                   return phoneHref ? (
-                    <a href={phoneHref} className={styles.towTruckDetailCallButton}>
+                    <a
+                      href={phoneHref}
+                      className={styles.towTruckDetailCallButton}
+                    >
                       📞 Ara
                     </a>
                   ) : null;
@@ -1501,7 +1807,11 @@ export default function Home() {
               <div>
                 <div className={styles.panelTitle}>Çekici ekle</div>
               </div>
-              <button className={styles.secondary} type="button" onClick={() => setShowTowModal(false)}>
+              <button
+                className={styles.secondary}
+                type="button"
+                onClick={() => setShowTowModal(false)}
+              >
                 Kapat
               </button>
             </div>
@@ -1547,7 +1857,9 @@ export default function Home() {
                 <input
                   className={styles.input}
                   value={towForm.name}
-                  onChange={(e) => setTowForm({ ...towForm, name: e.target.value })}
+                  onChange={(e) =>
+                    setTowForm({ ...towForm, name: e.target.value })
+                  }
                   placeholder="Çekici adı"
                 />
               </label>
@@ -1569,7 +1881,11 @@ export default function Home() {
                 <div className={styles.photoUpload}>
                   {towPhotoPreview ? (
                     <div className={styles.photoPreview}>
-                      <img src={towPhotoPreview} alt="Preview" className={styles.photoPreviewImage} />
+                      <img
+                        src={towPhotoPreview}
+                        alt="Preview"
+                        className={styles.photoPreviewImage}
+                      />
                       <button
                         type="button"
                         className={styles.photoRemoveButton}
@@ -1611,7 +1927,9 @@ export default function Home() {
                 <textarea
                   className={styles.textarea}
                   value={towForm.notes}
-                  onChange={(e) => setTowForm({ ...towForm, notes: e.target.value })}
+                  onChange={(e) =>
+                    setTowForm({ ...towForm, notes: e.target.value })
+                  }
                   placeholder="Opsiyonel not"
                 />
               </label>
@@ -1631,7 +1949,11 @@ export default function Home() {
               </div>
             </div>
             <div className={styles.buttonRow}>
-              <button className={styles.primary} onClick={handleTowSave} disabled={towLoading}>
+              <button
+                className={styles.primary}
+                onClick={handleTowSave}
+                disabled={towLoading}
+              >
                 {towLoading ? "Kaydediliyor..." : "Kaydet"}
               </button>
             </div>
@@ -1640,23 +1962,34 @@ export default function Home() {
       ) : null}
 
       {showTowList ? (
-        <div className={styles.modalOverlay} role="dialog" aria-modal="true" onClick={() => setShowTowList(false)}>
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowTowList(false)}
+        >
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div>
                 <div className={styles.panelTitle}>Çekicilerim</div>
-                <div className={styles.smallMuted} style={{ marginTop: '4px' }}>
-                  {towList.length} çekici {towList.filter(t => t.isActive).length > 0 && `(${towList.filter(t => t.isActive).length} aktif)`}
+                <div className={styles.smallMuted} style={{ marginTop: "4px" }}>
+                  {towList.length} çekici{" "}
+                  {towList.filter((t) => t.isActive).length > 0 &&
+                    `(${towList.filter((t) => t.isActive).length} aktif)`}
                 </div>
               </div>
               <div className={styles.actions}>
-                <button className={styles.addTowButton} type="button" onClick={openTowModal}>
+                <button
+                  className={styles.addTowButton}
+                  type="button"
+                  onClick={openTowModal}
+                >
                   <span className={styles.addTowIcon}>+</span>
                   <span>Yeni çekici</span>
                 </button>
-                <button 
-                  className={styles.modalCloseButton} 
-                  type="button" 
+                <button
+                  className={styles.modalCloseButton}
+                  type="button"
                   onClick={() => setShowTowList(false)}
                   aria-label="Kapat"
                 >
@@ -1668,14 +2001,24 @@ export default function Home() {
               {towLoading ? (
                 <div className={styles.loadingState}>
                   <div className={styles.loadingSpinner}></div>
-                  <div className={styles.smallMuted}>Çekiciler yükleniyor...</div>
+                  <div className={styles.smallMuted}>
+                    Çekiciler yükleniyor...
+                  </div>
                 </div>
               ) : towList.length === 0 ? (
                 <div className={styles.emptyState}>
                   <div className={styles.emptyStateIcon}>🚛</div>
-                  <div className={styles.emptyStateTitle}>Henüz çekici eklenmemiş</div>
-                  <div className={styles.emptyStateText}>Yeni çekici eklemek için butona tıklayın</div>
-                  <button className={styles.primary} type="button" onClick={openTowModal}>
+                  <div className={styles.emptyStateTitle}>
+                    Henüz çekici eklenmemiş
+                  </div>
+                  <div className={styles.emptyStateText}>
+                    Yeni çekici eklemek için butona tıklayın
+                  </div>
+                  <button
+                    className={styles.primary}
+                    type="button"
+                    onClick={openTowModal}
+                  >
                     + Çekici Ekle
                   </button>
                 </div>
@@ -1685,18 +2028,24 @@ export default function Home() {
                     <div key={item.id} className={styles.towListItem}>
                       <div className={styles.towListItemHeader}>
                         {item.photoUrl ? (
-                          <img 
-                            src={item.photoUrl} 
+                          <img
+                            src={item.photoUrl}
                             alt={item.name || "Çekici"}
                             className={styles.towListItemAvatar}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
+                              target.style.display = "none";
                             }}
                           />
                         ) : null}
-                        <div className={styles.towListItemName}>{item.name || "Çekici"}</div>
-                        <span className={`${styles.towListItemStatus} ${item.isActive ? styles.active : styles.inactive}`}>
+                        <div className={styles.towListItemName}>
+                          {item.name || "Çekici"}
+                        </div>
+                        <span
+                          className={`${styles.towListItemStatus} ${
+                            item.isActive ? styles.active : styles.inactive
+                          }`}
+                        >
                           {item.isActive ? "Aktif" : "Pasif"}
                         </span>
                       </div>
@@ -1704,15 +2053,22 @@ export default function Home() {
                         <div className={styles.towListItemInfoRow}>
                           <span className={styles.towListItemInfoIcon}>🚗</span>
                           <span className={styles.smallMuted}>Plaka:</span>
-                          <span className={styles.towListItemPlate}>{item.plate || "-"}</span>
+                          <span className={styles.towListItemPlate}>
+                            {item.plate || "-"}
+                          </span>
                         </div>
                         <div className={styles.towListItemInfoRow}>
                           <span className={styles.towListItemInfoIcon}>📍</span>
                           <span className={styles.smallMuted}>Konum:</span>
                           <span className={styles.towListItemInfoValue}>
-                            {[item.areaDistrict || selectedDistrictName, item.areaCity || selectedProvinceName]
+                            {[
+                              item.areaDistrict || selectedDistrictName,
+                              item.areaCity || selectedProvinceName,
+                            ]
                               .filter(Boolean)
-                              .join(", ") || item.location || "Belirtilmedi"}
+                              .join(", ") ||
+                              item.location ||
+                              "Belirtilmedi"}
                           </span>
                         </div>
                       </div>
@@ -1725,7 +2081,10 @@ export default function Home() {
                                 className={styles.input}
                                 value={editingTowForm.name}
                                 onChange={(e) =>
-                                  setEditingTowForm({ ...editingTowForm, name: e.target.value })
+                                  setEditingTowForm({
+                                    ...editingTowForm,
+                                    name: e.target.value,
+                                  })
                                 }
                               />
                             </label>
@@ -1735,8 +2094,13 @@ export default function Home() {
                                 className={styles.input}
                                 value={editingTowForm.plate}
                                 onChange={(e) => {
-                                  const formatted = formatLicensePlate(e.target.value);
-                                  setEditingTowForm({ ...editingTowForm, plate: formatted });
+                                  const formatted = formatLicensePlate(
+                                    e.target.value
+                                  );
+                                  setEditingTowForm({
+                                    ...editingTowForm,
+                                    plate: formatted,
+                                  });
                                 }}
                                 placeholder="34 ABC 123"
                                 maxLength={11}
@@ -1747,7 +2111,11 @@ export default function Home() {
                               <div className={styles.photoUpload}>
                                 {editingTowPhotoPreview ? (
                                   <div className={styles.photoPreview}>
-                                    <img src={editingTowPhotoPreview} alt="Preview" className={styles.photoPreviewImage} />
+                                    <img
+                                      src={editingTowPhotoPreview}
+                                      alt="Preview"
+                                      className={styles.photoPreviewImage}
+                                    />
                                     <button
                                       type="button"
                                       className={styles.photoRemoveButton}
@@ -1771,7 +2139,9 @@ export default function Home() {
                                           setEditingTowPhoto(file);
                                           const reader = new FileReader();
                                           reader.onloadend = () => {
-                                            setEditingTowPhotoPreview(reader.result as string);
+                                            setEditingTowPhotoPreview(
+                                              reader.result as string
+                                            );
                                           };
                                           reader.readAsDataURL(file);
                                         }
@@ -1792,7 +2162,9 @@ export default function Home() {
                                 onChange={async (e) => {
                                   const val = e.target.value;
                                   const provName =
-                                    uniqueProvinces.find((p) => String(p.id) === val)?.name || "";
+                                    uniqueProvinces.find(
+                                      (p) => String(p.id) === val
+                                    )?.name || "";
                                   setEditingTowForm((form) => ({
                                     ...form,
                                     provinceId: val,
@@ -1803,7 +2175,9 @@ export default function Home() {
                                   setEditingDistricts([]);
                                   if (val) {
                                     try {
-                                      const fetched = await getDistricts(Number(val));
+                                      const fetched = await getDistricts(
+                                        Number(val)
+                                      );
                                       setEditingDistricts(fetched);
                                     } catch {
                                       setEditingDistricts([]);
@@ -1829,15 +2203,21 @@ export default function Home() {
                                     ...editingTowForm,
                                     districtId: e.target.value,
                                     districtName:
-                                      editingDistricts.find((d) => String(d.districtId) === e.target.value)
-                                        ?.districtName || "",
+                                      editingDistricts.find(
+                                        (d) =>
+                                          String(d.districtId) ===
+                                          e.target.value
+                                      )?.districtName || "",
                                   })
                                 }
                                 disabled={!editingTowForm.provinceId}
                               >
                                 <option value="">Ilce secin</option>
                                 {editingDistricts.map((d) => (
-                                  <option key={d.districtId} value={d.districtId}>
+                                  <option
+                                    key={d.districtId}
+                                    value={d.districtId}
+                                  >
                                     {d.districtName}
                                   </option>
                                 ))}
@@ -1916,10 +2296,17 @@ export default function Home() {
           <div className={styles.registerModal}>
             <div className={styles.registerHeader}>
               <div className={styles.registerLogoWrapper}>
-                <Image src={logo} alt="Yoldan Çek" className={styles.registerLogo} priority />
+                <Image
+                  src={logo}
+                  alt="Yoldan Çek"
+                  className={styles.registerLogo}
+                  priority
+                />
               </div>
               <h2 className={styles.registerTitle}>Hesap Oluştur</h2>
-              <p className={styles.registerSubtitle}>Yeni hesabınızı oluşturun ve başlayın</p>
+              <p className={styles.registerSubtitle}>
+                Yeni hesabınızı oluşturun ve başlayın
+              </p>
               <button
                 className={styles.registerCloseButton}
                 type="button"
@@ -1933,97 +2320,179 @@ export default function Home() {
             <div className={styles.registerForm}>
               <div className={styles.registerFormGrid}>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>Ad</span>
+                  <span className={styles.registerFieldLabel}>
+                    Ad <span className={styles.required}>*</span>
+                  </span>
                   <input
                     className={styles.registerInput}
                     value={registerForm.firstName}
                     onChange={(e) =>
-                      setRegisterForm({ ...registerForm, firstName: e.target.value })
+                      setRegisterForm({
+                        ...registerForm,
+                        firstName: e.target.value,
+                      })
                     }
                     placeholder="Adınız"
+                    required
                   />
                 </label>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>Soyad</span>
+                  <span className={styles.registerFieldLabel}>
+                    Soyad <span className={styles.required}>*</span>
+                  </span>
                   <input
                     className={styles.registerInput}
                     value={registerForm.lastName}
                     onChange={(e) =>
-                      setRegisterForm({ ...registerForm, lastName: e.target.value })
+                      setRegisterForm({
+                        ...registerForm,
+                        lastName: e.target.value,
+                      })
                     }
                     placeholder="Soyadınız"
+                    required
                   />
                 </label>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>Firma Adı</span>
+                  <span className={styles.registerFieldLabel}>
+                    Firma Adı <span className={styles.required}>*</span>
+                  </span>
                   <input
                     className={styles.registerInput}
                     value={registerForm.companyName}
                     onChange={(e) =>
-                      setRegisterForm({ ...registerForm, companyName: e.target.value })
+                      setRegisterForm({
+                        ...registerForm,
+                        companyName: e.target.value,
+                      })
                     }
                     placeholder="Örn: Mavi Oto"
+                    required
                   />
                 </label>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>Telefon</span>
+                  <span className={styles.registerFieldLabel}>
+                    Telefon <span className={styles.required}>*</span>
+                  </span>
                   <input
                     className={styles.registerInput}
                     value={registerForm.phoneNumber}
                     onChange={(e) =>
-                      setRegisterForm({ ...registerForm, phoneNumber: e.target.value })
+                      setRegisterForm({
+                        ...registerForm,
+                        phoneNumber: e.target.value,
+                      })
                     }
                     placeholder="+90 5xx xxx xx xx"
+                    required
                   />
                 </label>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>E-posta</span>
+                  <span className={styles.registerFieldLabel}>
+                    E-posta <span className={styles.required}>*</span>
+                  </span>
                   <input
                     className={styles.registerInput}
                     type="email"
                     value={registerForm.email}
                     onChange={(e) =>
-                      setRegisterForm({ ...registerForm, email: e.target.value })
+                      setRegisterForm({
+                        ...registerForm,
+                        email: e.target.value,
+                      })
                     }
                     placeholder="firma@ornek.com"
+                    required
                   />
                 </label>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>Şifre</span>
+                  <span className={styles.registerFieldLabel}>
+                    Şifre <span className={styles.required}>*</span>
+                  </span>
                   <input
                     className={styles.registerInput}
                     type="password"
                     value={registerForm.password}
                     onChange={(e) =>
-                      setRegisterForm({ ...registerForm, password: e.target.value })
+                      setRegisterForm({
+                        ...registerForm,
+                        password: e.target.value,
+                      })
                     }
                     placeholder="Minimum 6 karakter"
+                    required
+                    minLength={6}
                   />
                 </label>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>Hizmet Şehri</span>
-                  <input
-                    className={styles.registerInput}
-                    value={registerForm.serviceCity}
-                    onChange={(e) =>
-                      setRegisterForm({ ...registerForm, serviceCity: e.target.value })
-                    }
-                    placeholder="İl / bölge"
-                  />
+                  <span className={styles.registerFieldLabel}>
+                    İl <span className={styles.required}>*</span>
+                  </span>
+                  <select
+                    className={styles.registerSelect}
+                    value={provinceId}
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      setProvinceId(val);
+                      setDistrictId("");
+                      setDistricts([]);
+                      if (val) {
+                        const fetched = await getDistricts(Number(val));
+                        setDistricts(fetched);
+                      }
+                    }}
+                    required
+                  >
+                    <option value="">İl seçin</option>
+                    {uniqueProvinces.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>Açık Adres</span>
+                  <span className={styles.registerFieldLabel}>
+                    İlçe <span className={styles.required}>*</span>
+                  </span>
+                  <select
+                    className={styles.registerSelect}
+                    value={districtId}
+                    onChange={(e) => {
+                      setDistrictId(e.target.value);
+                    }}
+                    disabled={!provinceId}
+                    required
+                  >
+                    <option value="">İlçe seçin</option>
+                    {districts.map((d) => (
+                      <option key={d.districtId} value={d.districtId}>
+                        {d.districtName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.registerField}>
+                  <span className={styles.registerFieldLabel}>
+                    Açık Adres <span className={styles.required}>*</span>
+                  </span>
                   <textarea
                     className={styles.registerTextarea}
                     value={registerForm.fullAddress}
                     onChange={(e) =>
-                      setRegisterForm({ ...registerForm, fullAddress: e.target.value })
+                      setRegisterForm({
+                        ...registerForm,
+                        fullAddress: e.target.value,
+                      })
                     }
                     placeholder="Adres"
+                    required
                   />
                 </label>
                 <label className={styles.registerField}>
-                  <span className={styles.registerFieldLabel}>Avatar (opsiyonel)</span>
+                  <span className={styles.registerFieldLabel}>
+                    Avatar (opsiyonel)
+                  </span>
                   <input
                     className={styles.registerFileInput}
                     type="file"
@@ -2042,9 +2511,15 @@ export default function Home() {
                   />
                   <div className={styles.registerAvatarRow}>
                     {photoPreview ? (
-                      <img src={photoPreview} alt="Önizleme" className={styles.registerAvatar} />
+                      <img
+                        src={photoPreview}
+                        alt="Önizleme"
+                        className={styles.registerAvatar}
+                      />
                     ) : (
-                      <div className={styles.registerAvatarPlaceholder}>{initials}</div>
+                      <div className={styles.registerAvatarPlaceholder}>
+                        {initials}
+                      </div>
                     )}
                     <span className={styles.registerAvatarHint}>Opsiyonel</span>
                   </div>
@@ -2092,7 +2567,12 @@ export default function Home() {
           <div className={styles.loginModal}>
             <div className={styles.loginHeader}>
               <div className={styles.loginLogoWrapper}>
-                <Image src={logo} alt="Yoldan Çek" className={styles.loginLogo} priority />
+                <Image
+                  src={logo}
+                  alt="Yoldan Çek"
+                  className={styles.loginLogo}
+                  priority
+                />
               </div>
               <h2 className={styles.loginTitle}>Hoş Geldiniz</h2>
               <p className={styles.loginSubtitle}>Hesabınıza giriş yapın</p>
@@ -2108,21 +2588,19 @@ export default function Home() {
             {toast ? <div className={styles.toast}>{toast}</div> : null}
             <div className={styles.loginForm}>
               <label className={styles.loginField}>
-                <span className={styles.loginFieldLabel}>
-                  E-posta Adresi
-                </span>
+                <span className={styles.loginFieldLabel}>E-posta Adresi</span>
                 <input
                   className={styles.loginInput}
                   type="email"
                   value={loginForm.email}
-                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                  onChange={(e) =>
+                    setLoginForm({ ...loginForm, email: e.target.value })
+                  }
                   placeholder="ornek@firma.com"
                 />
               </label>
               <label className={styles.loginField}>
-                <span className={styles.loginFieldLabel}>
-                  Şifre
-                </span>
+                <span className={styles.loginFieldLabel}>Şifre</span>
                 <div className={styles.loginPasswordWrap}>
                   <input
                     className={styles.loginInput}
@@ -2137,7 +2615,9 @@ export default function Home() {
                     type="button"
                     className={styles.loginEyeButton}
                     onClick={() => setShowPassword((p) => !p)}
-                    aria-label={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
+                    aria-label={
+                      showPassword ? "Şifreyi gizle" : "Şifreyi göster"
+                    }
                   >
                     {showPassword ? "👁️" : "👁️‍🗨️"}
                   </button>
@@ -2180,12 +2660,17 @@ export default function Home() {
         </div>
       ) : null}
       {showProfileModal ? (
-        <div className={styles.modalOverlay} role="dialog" aria-modal="true" onClick={() => setShowProfileModal(false)}>
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowProfileModal(false)}
+        >
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div>
                 <div className={styles.panelTitle}>Profilim</div>
-                <div className={styles.smallMuted} style={{ marginTop: '4px' }}>
+                <div className={styles.smallMuted} style={{ marginTop: "4px" }}>
                   Profil bilgilerinizi güncelleyin
                 </div>
               </div>
@@ -2203,7 +2688,11 @@ export default function Home() {
                 <div className={styles.profileAvatarSection}>
                   {profilePhotoPreview ? (
                     <div className={styles.profileAvatarWrapper}>
-                      <img src={profilePhotoPreview} alt={user?.name || 'Kullanıcı'} className={styles.profileAvatar} />
+                      <img
+                        src={profilePhotoPreview}
+                        alt={user?.name || "Kullanıcı"}
+                        className={styles.profileAvatar}
+                      />
                       <button
                         type="button"
                         className={styles.profileAvatarRemoveButton}
@@ -2218,11 +2707,13 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className={styles.profileAvatarPlaceholder}>
-                      {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                      {user?.name?.charAt(0)?.toUpperCase() || "U"}
                     </div>
                   )}
                   <div className={styles.profileAvatarInfo}>
-                    <div className={styles.profileName}>{user?.name || 'Kullanıcı'}</div>
+                    <div className={styles.profileName}>
+                      {user?.name || "Kullanıcı"}
+                    </div>
                     {user?.company && user.company !== user?.name ? (
                       <div className={styles.smallMuted}>{user.company}</div>
                     ) : null}
@@ -2248,7 +2739,11 @@ export default function Home() {
                     />
                     <div className={styles.profilePhotoUploadButton}>
                       <span className={styles.uploadIcon}>📷</span>
-                      <span>{profilePhotoPreview ? 'Fotoğrafı Değiştir' : 'Şirket Fotoğrafı Ekle'}</span>
+                      <span>
+                        {profilePhotoPreview
+                          ? "Fotoğrafı Değiştir"
+                          : "Şirket Fotoğrafı Ekle"}
+                      </span>
                     </div>
                   </label>
                 </div>
@@ -2267,7 +2762,12 @@ export default function Home() {
                     <input
                       className={styles.profileInput}
                       value={profileForm.firstName}
-                      onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
+                      onChange={(e) =>
+                        setProfileForm({
+                          ...profileForm,
+                          firstName: e.target.value,
+                        })
+                      }
                       placeholder="Adınızı girin"
                     />
                   </label>
@@ -2279,7 +2779,12 @@ export default function Home() {
                     <input
                       className={styles.profileInput}
                       value={profileForm.lastName}
-                      onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
+                      onChange={(e) =>
+                        setProfileForm({
+                          ...profileForm,
+                          lastName: e.target.value,
+                        })
+                      }
                       placeholder="Soyadınızı girin"
                     />
                   </label>
@@ -2291,7 +2796,12 @@ export default function Home() {
                     <input
                       className={styles.profileInput}
                       value={profileForm.companyName}
-                      onChange={(e) => setProfileForm({ ...profileForm, companyName: e.target.value })}
+                      onChange={(e) =>
+                        setProfileForm({
+                          ...profileForm,
+                          companyName: e.target.value,
+                        })
+                      }
                       placeholder="Firma adınızı girin"
                     />
                   </label>
@@ -2312,7 +2822,12 @@ export default function Home() {
                       className={styles.profileInput}
                       type="email"
                       value={profileForm.email}
-                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      onChange={(e) =>
+                        setProfileForm({
+                          ...profileForm,
+                          email: e.target.value,
+                        })
+                      }
                       placeholder="ornek@mail.com"
                     />
                   </label>
@@ -2324,7 +2839,12 @@ export default function Home() {
                     <input
                       className={styles.profileInput}
                       value={profileForm.phoneNumber}
-                      onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })}
+                      onChange={(e) =>
+                        setProfileForm({
+                          ...profileForm,
+                          phoneNumber: e.target.value,
+                        })
+                      }
                       placeholder="+90 5xx xxx xx xx"
                     />
                   </label>
@@ -2344,11 +2864,19 @@ export default function Home() {
                     <input
                       className={styles.profileInput}
                       value={profileForm.serviceCity}
-                      onChange={(e) => setProfileForm({ ...profileForm, serviceCity: e.target.value })}
+                      onChange={(e) =>
+                        setProfileForm({
+                          ...profileForm,
+                          serviceCity: e.target.value,
+                        })
+                      }
                       placeholder="Hizmet verdiğiniz şehir"
                     />
                   </label>
-                  <label className={styles.profileField} style={{ gridColumn: '1 / -1' }}>
+                  <label
+                    className={styles.profileField}
+                    style={{ gridColumn: "1 / -1" }}
+                  >
                     <span className={styles.fieldLabel}>
                       <span className={styles.fieldIcon}>📍</span>
                       Adres
@@ -2356,23 +2884,37 @@ export default function Home() {
                     <textarea
                       className={styles.profileTextarea}
                       value={profileForm.fullAddress}
-                      onChange={(e) => setProfileForm({ ...profileForm, fullAddress: e.target.value })}
+                      onChange={(e) =>
+                        setProfileForm({
+                          ...profileForm,
+                          fullAddress: e.target.value,
+                        })
+                      }
                       placeholder="Detaylı adres bilgisi"
                       rows={4}
                     />
                   </label>
-                  <div className={styles.buttonRow} style={{ gridColumn: '1 / -1' }}>
+                  <div
+                    className={styles.buttonRow}
+                    style={{ gridColumn: "1 / -1" }}
+                  >
                     <button
                       className={styles.locationButton}
                       type="button"
                       onClick={() =>
                         askGeolocation((lat, lng) => {
-                          const locText = `Konum: ${lat.toFixed(5)},${lng.toFixed(5)}`;
+                          const locText = `Konum: ${lat.toFixed(
+                            5
+                          )},${lng.toFixed(5)}`;
                           setProfileForm((f) => ({
                             ...f,
-                            fullAddress: f.fullAddress ? `${f.fullAddress} | ${locText}` : locText,
+                            fullAddress: f.fullAddress
+                              ? `${f.fullAddress} | ${locText}`
+                              : locText,
                           }));
-                          setToast("Konum eklendi, gerekirse il/ilceyi elle yazabilirsiniz.");
+                          setToast(
+                            "Konum eklendi, gerekirse il/ilceyi elle yazabilirsiniz."
+                          );
                           setGeoLocation({ lat, lng });
                         })
                       }
@@ -2384,7 +2926,10 @@ export default function Home() {
                 </div>
               </div>
               <div className={styles.profileActions}>
-                <button className={styles.profileSaveButton} onClick={handleProfileSave}>
+                <button
+                  className={styles.profileSaveButton}
+                  onClick={handleProfileSave}
+                >
                   <span className={styles.buttonIcon}>✓</span>
                   <span>Profilimi Güncelle</span>
                 </button>
@@ -2396,68 +2941,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
